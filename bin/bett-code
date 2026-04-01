@@ -1,0 +1,174 @@
+#!/usr/bin/env bun
+/**
+ * bett-code CLI entry point
+ * Sets up MACRO globals, shims, and env before launching the app.
+ */
+
+import { plugin } from 'bun'
+import { resolve, dirname, join } from 'path'
+import { existsSync } from 'fs'
+
+const ROOT = resolve(dirname(import.meta.dir))
+
+// MACRO globals (replaces Bun --define build-time constants)
+;(globalThis as any).MACRO = {
+  VERSION: '1.0.0',
+  BUILD_TIME: new Date().toISOString(),
+  PACKAGE_URL: 'bett-code',
+  NATIVE_PACKAGE_URL: 'bett-code',
+  FEEDBACK_CHANNEL: 'https://github.com/MBH0/bett-code/issues',
+  ISSUES_EXPLAINER: 'https://github.com/MBH0/bett-code/issues',
+  VERSION_CHANGELOG: '',
+}
+
+// Environment — isolate bett-code from Claude Code
+import { homedir } from 'os'
+process.env.USER_TYPE = 'external'
+process.env.DISABLE_TELEMETRY = '1'
+process.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = '1'
+// Use separate config directory so bett-code auth/config never conflicts with Claude Code
+process.env.CLAUDE_CONFIG_DIR ??= join(homedir(), '.bett-code')
+
+// Bun plugin to resolve bun:bundle and src/ absolute imports
+plugin({
+  name: 'bett-code-resolver',
+  setup(build) {
+    build.onResolve({ filter: /^bun:bundle$/ }, () => ({
+      path: join(ROOT, 'src/shims/bun-bundle.ts'),
+    }))
+
+    build.onResolve({ filter: /^src\// }, (args) => {
+      const base = args.path.replace(/\.js$/, '').replace(/\.jsx$/, '')
+      const candidates = [
+        join(ROOT, base + '.ts'),
+        join(ROOT, base + '.tsx'),
+        join(ROOT, base + '.js'),
+        join(ROOT, base, 'index.ts'),
+        join(ROOT, base, 'index.tsx'),
+      ]
+      for (const c of candidates) {
+        if (existsSync(c)) return { path: c }
+      }
+      return undefined
+    })
+
+    build.onResolve({ filter: /\.d\.ts$/ }, () => ({
+      path: join(ROOT, 'src/shims/empty-stub.ts'),
+    }))
+
+    build.onResolve({ filter: /\.(md|txt)$/ }, (args) => {
+      const resolved = join(dirname(args.importer), args.path)
+      if (existsSync(resolved)) return undefined
+      return { path: join(ROOT, 'src/shims/empty-stub.ts') }
+    })
+  },
+})
+
+// Load saved provider config from ~/.bett-code/.claude.json before CLI starts
+import { readFileSync } from 'fs'
+try {
+  const configPath = join(process.env.CLAUDE_CONFIG_DIR!, '.claude.json')
+  if (existsSync(configPath)) {
+    const config = JSON.parse(readFileSync(configPath, 'utf8'))
+    if (config.bettProvider && config.bettProvider !== 'anthropic') {
+      process.env.BETT_CODE_PROVIDER ??= config.bettProvider
+      if (config.bettProviderApiKey) process.env.BETT_CODE_PROVIDER_API_KEY ??= config.bettProviderApiKey
+      if (config.bettProviderBaseUrl) process.env.BETT_CODE_PROVIDER_BASE_URL ??= config.bettProviderBaseUrl
+      if (config.bettModel) process.env.ANTHROPIC_MODEL ??= config.bettModel
+      // Set dummy Anthropic key to bypass auth/login screens for external providers
+      process.env.ANTHROPIC_API_KEY ??= 'bett-code-external-provider'
+    } else if (config.bettProvider === 'anthropic' && config.bettProviderApiKey) {
+      process.env.ANTHROPIC_API_KEY ??= config.bettProviderApiKey
+      if (config.bettModel) process.env.ANTHROPIC_MODEL ??= config.bettModel
+    }
+  }
+} catch {}
+
+// Handle --setting flag before launching CLI
+if (process.argv.includes('--setting') || process.argv.includes('--settings')) {
+  const { createInterface } = await import('readline')
+  const rl = createInterface({ input: process.stdin, output: process.stdout })
+  const ask = (q: string): Promise<string> => new Promise(r => rl.question(q, r))
+
+  console.log('\n  \x1b[1mbett-code Settings\x1b[0m\n')
+  console.log('  Select provider:')
+  console.log('    1. OpenAI (gpt-4o, gpt-4-turbo, etc.)')
+  console.log('    2. Anthropic (claude-sonnet, claude-opus, etc.)')
+  console.log('    3. Gemini (gemini-pro, gemini-2.0-flash, etc.)')
+  console.log('    4. Ollama (local models - llama3.1, codellama, etc.)')
+  console.log()
+
+  const choice = await ask('  Choice [1-4]: ')
+  const providers: Record<string, { name: string, needsKey: boolean, defaultModel: string }> = {
+    '1': { name: 'openai', needsKey: true, defaultModel: 'gpt-4o' },
+    '2': { name: 'anthropic', needsKey: true, defaultModel: 'claude-sonnet-4-5-20250514' },
+    '3': { name: 'gemini', needsKey: true, defaultModel: 'gemini-2.0-flash' },
+    '4': { name: 'ollama', needsKey: false, defaultModel: 'llama3.1' },
+  }
+
+  const selected = providers[choice.trim()]
+  if (!selected) {
+    console.log('  Invalid choice.')
+    process.exit(1)
+  }
+
+  console.log(`\n  Provider: \x1b[32m${selected.name}\x1b[0m`)
+
+  let apiKey = ''
+  if (selected.needsKey) {
+    apiKey = await ask('  API Key: ')
+    if (!apiKey.trim()) {
+      console.log('  API key is required.')
+      process.exit(1)
+    }
+  }
+
+  const modelInput = await ask(`  Model [${selected.defaultModel}]: `)
+  const model = modelInput.trim() || selected.defaultModel
+
+  let baseUrl = ''
+  if (selected.name === 'ollama') {
+    const urlInput = await ask('  Ollama URL [http://localhost:11434]: ')
+    baseUrl = urlInput.trim() || 'http://localhost:11434'
+  } else if (selected.name === 'openai') {
+    const urlInput = await ask('  Base URL [https://api.openai.com/v1]: ')
+    baseUrl = urlInput.trim() || ''
+  }
+
+  rl.close()
+
+  // Save to config
+  const configPath = join(process.env.CLAUDE_CONFIG_DIR!, '.claude.json')
+  let config: any = {}
+  try { config = JSON.parse(readFileSync(configPath, 'utf8')) } catch {}
+  config.bettProvider = selected.name
+  config.bettProviderApiKey = apiKey.trim()
+  config.bettModel = model
+  if (baseUrl) config.bettProviderBaseUrl = baseUrl
+  else delete config.bettProviderBaseUrl
+  // Mark onboarding complete and auto-approve dummy key so bett-code goes straight to REPL
+  config.hasCompletedOnboarding = true
+  config.numStartups = config.numStartups || 1
+  config.theme = config.theme || 'dark'
+  config.preferredNotifChannel = config.preferredNotifChannel || 'iterm2'
+  config.verbose = config.verbose ?? false
+  config.autoCompactEnabled = config.autoCompactEnabled ?? true
+  config.showTurnDuration = config.showTurnDuration ?? false
+  if (selected.name !== 'anthropic') {
+    config.customApiKeyResponses = {
+      approved: ['bett-code-external-provider'],
+      rejected: [],
+    }
+  }
+
+  const { writeFileSync, mkdirSync } = await import('fs')
+  mkdirSync(process.env.CLAUDE_CONFIG_DIR!, { recursive: true })
+  writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n', { mode: 0o600 })
+
+  console.log(`\n  \x1b[32m✓\x1b[0m Settings saved to ${configPath}`)
+  console.log(`  Run \x1b[1mbett-code\x1b[0m to start.\n`)
+  process.exit(0)
+}
+
+// Launch CLI
+await import(join(ROOT, 'src/entrypoints/cli.tsx'))

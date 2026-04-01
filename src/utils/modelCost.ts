@@ -86,6 +86,93 @@ export const COST_HAIKU_45 = {
   webSearchRequests: 0.01,
 } as const satisfies ModelCosts
 
+// =====================================================
+// OpenAI pricing (per MTok) — https://openai.com/api/pricing/
+// =====================================================
+export const COST_GPT4O: ModelCosts = {
+  inputTokens: 2.5, outputTokens: 10,
+  promptCacheWriteTokens: 2.5, promptCacheReadTokens: 1.25, webSearchRequests: 0,
+}
+export const COST_GPT4O_MINI: ModelCosts = {
+  inputTokens: 0.15, outputTokens: 0.6,
+  promptCacheWriteTokens: 0.15, promptCacheReadTokens: 0.075, webSearchRequests: 0,
+}
+export const COST_O3: ModelCosts = {
+  inputTokens: 2, outputTokens: 8,
+  promptCacheWriteTokens: 2, promptCacheReadTokens: 1, webSearchRequests: 0,
+}
+export const COST_O3_MINI: ModelCosts = {
+  inputTokens: 1.1, outputTokens: 4.4,
+  promptCacheWriteTokens: 1.1, promptCacheReadTokens: 0.55, webSearchRequests: 0,
+}
+export const COST_O4_MINI: ModelCosts = {
+  inputTokens: 1.1, outputTokens: 4.4,
+  promptCacheWriteTokens: 1.1, promptCacheReadTokens: 0.55, webSearchRequests: 0,
+}
+export const COST_GPT4_TURBO: ModelCosts = {
+  inputTokens: 10, outputTokens: 30,
+  promptCacheWriteTokens: 10, promptCacheReadTokens: 5, webSearchRequests: 0,
+}
+export const COST_O1: ModelCosts = {
+  inputTokens: 15, outputTokens: 60,
+  promptCacheWriteTokens: 15, promptCacheReadTokens: 7.5, webSearchRequests: 0,
+}
+export const COST_O1_MINI: ModelCosts = {
+  inputTokens: 1.1, outputTokens: 4.4,
+  promptCacheWriteTokens: 1.1, promptCacheReadTokens: 0.55, webSearchRequests: 0,
+}
+export const COST_CODEX_MINI: ModelCosts = {
+  inputTokens: 1.5, outputTokens: 6,
+  promptCacheWriteTokens: 1.5, promptCacheReadTokens: 0.75, webSearchRequests: 0,
+}
+
+// =====================================================
+// Google Gemini pricing — https://ai.google.dev/pricing
+// =====================================================
+export const COST_GEMINI_2_FLASH: ModelCosts = {
+  inputTokens: 0.1, outputTokens: 0.4,
+  promptCacheWriteTokens: 0.1, promptCacheReadTokens: 0.025, webSearchRequests: 0,
+}
+export const COST_GEMINI_2_5_PRO: ModelCosts = {
+  inputTokens: 1.25, outputTokens: 10,
+  promptCacheWriteTokens: 1.25, promptCacheReadTokens: 0.31, webSearchRequests: 0,
+}
+export const COST_GEMINI_2_5_FLASH: ModelCosts = {
+  inputTokens: 0.15, outputTokens: 0.6,
+  promptCacheWriteTokens: 0.15, promptCacheReadTokens: 0.0375, webSearchRequests: 0,
+}
+
+// External provider model costs lookup
+const EXTERNAL_MODEL_COSTS: Record<string, ModelCosts> = {
+  // OpenAI
+  'gpt-4o': COST_GPT4O,
+  'gpt-4o-2024-08-06': COST_GPT4O,
+  'gpt-4o-2024-11-20': COST_GPT4O,
+  'gpt-4o-mini': COST_GPT4O_MINI,
+  'gpt-4o-mini-2024-07-18': COST_GPT4O_MINI,
+  'gpt-4-turbo': COST_GPT4_TURBO,
+  'gpt-4-turbo-2024-04-09': COST_GPT4_TURBO,
+  'o1': COST_O1,
+  'o1-2024-12-17': COST_O1,
+  'o1-mini': COST_O1_MINI,
+  'o1-mini-2024-09-12': COST_O1_MINI,
+  'o3': COST_O3,
+  'o3-2025-04-16': COST_O3,
+  'o3-mini': COST_O3_MINI,
+  'o3-mini-2025-01-31': COST_O3_MINI,
+  'o4-mini': COST_O4_MINI,
+  'o4-mini-2025-04-16': COST_O4_MINI,
+  'codex-mini-latest': COST_CODEX_MINI,
+  // Gemini
+  'gemini-2.0-flash': COST_GEMINI_2_FLASH,
+  'gemini-2.0-flash-exp': COST_GEMINI_2_FLASH,
+  'gemini-2.5-pro': COST_GEMINI_2_5_PRO,
+  'gemini-2.5-pro-preview-05-06': COST_GEMINI_2_5_PRO,
+  'gemini-2.5-flash': COST_GEMINI_2_5_FLASH,
+  'gemini-2.5-flash-preview-04-17': COST_GEMINI_2_5_FLASH,
+  // Ollama — local, no cost
+}
+
 const DEFAULT_UNKNOWN_MODEL_COST = COST_TIER_5_25
 
 /**
@@ -142,6 +229,17 @@ function tokensToUSDCost(modelCosts: ModelCosts, usage: Usage): number {
 }
 
 export function getModelCosts(model: string, usage: Usage): ModelCosts {
+  // bett-code: Ollama is free (local)
+  if (process.env.BETT_CODE_PROVIDER === 'ollama') {
+    return { inputTokens: 0, outputTokens: 0, promptCacheWriteTokens: 0, promptCacheReadTokens: 0, webSearchRequests: 0 }
+  }
+  // bett-code: check external provider models first
+  const externalCosts = EXTERNAL_MODEL_COSTS[model]
+  if (externalCosts) return externalCosts
+  // Also check with prefix stripped (e.g. "openai/gpt-4o" → "gpt-4o")
+  const stripped = model.includes('/') ? model.split('/').pop()! : ''
+  if (stripped && EXTERNAL_MODEL_COSTS[stripped]) return EXTERNAL_MODEL_COSTS[stripped]
+
   const shortName = getCanonicalName(model)
 
   // Check if this is an Opus 4.6 model with fast mode active.

@@ -72,6 +72,11 @@ export async function assertMinVersion(): Promise<void> {
     return
   }
 
+  // bett-code: skip version check for external providers
+  if (process.env.BETT_CODE_PROVIDER && process.env.BETT_CODE_PROVIDER !== 'anthropic') {
+    return
+  }
+
   try {
     const versionConfig = await getDynamicConfig_BLOCKS_ON_INIT<{
       minVersion: string

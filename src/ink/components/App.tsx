@@ -226,7 +226,7 @@ export default class App extends PureComponent<Props, State> {
         // coexist -- our handler would drain stdin before Ink's can see it.
         // The buffered text is preserved for REPL.tsx via consumeEarlyInput().
         stopCapturingEarlyInput();
-        stdin.ref();
+        if (typeof stdin.ref === 'function') stdin.ref();
         stdin.setRawMode(true);
         stdin.addListener('readable', this.handleReadable);
         // Enable bracketed paste mode
@@ -275,7 +275,7 @@ export default class App extends PureComponent<Props, State> {
       this.props.stdout.write(DBP);
       stdin.setRawMode(false);
       stdin.removeListener('readable', this.handleReadable);
-      stdin.unref();
+      if (typeof stdin.unref === 'function') stdin.unref();
     }
   };
 

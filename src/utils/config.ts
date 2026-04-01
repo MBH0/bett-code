@@ -556,6 +556,11 @@ export type GlobalConfig = {
   // Speculation configuration (ant-only)
   speculationEnabled?: boolean // Whether speculation is enabled (default: true)
 
+  // bett-code provider configuration
+  bettProvider?: string // 'anthropic' | 'openai' | 'gemini' | 'ollama'
+  bettProviderApiKey?: string // API key for external provider
+  bettProviderBaseUrl?: string // Custom base URL for provider
+  bettModel?: string // Model to use (e.g. 'gpt-4o', 'llama3.1')
 
   // Client data for server-side experiments (fetched during bootstrap).
   clientDataCache?: Record<string, unknown> | null
@@ -663,6 +668,10 @@ export const GLOBAL_CONFIG_KEYS = [
   'prStatusFooterEnabled',
   'remoteControlAtStartup',
   'remoteDialogSeen',
+  'bettProvider',
+  'bettProviderApiKey',
+  'bettProviderBaseUrl',
+  'bettModel',
 ] as const
 
 export type GlobalConfigKey = (typeof GLOBAL_CONFIG_KEYS)[number]

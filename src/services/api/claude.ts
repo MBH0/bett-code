@@ -1194,7 +1194,7 @@ async function* queryModel(
       isModelSupportedForCacheEditing,
       getCachedMCConfig,
     } = await import('../compact/cachedMicrocompact.js')
-    const betas = await import('src/constants/betas.js')
+    const betas = await import('../../constants/betas.js')
     cacheEditingBetaHeader = betas.CACHE_EDITING_BETA_HEADER
     const featureEnabled = isCachedMicrocompactEnabled()
     const modelSupported = isModelSupportedForCacheEditing(options.model)
@@ -1779,6 +1779,8 @@ async function* queryModel(
 
     // bett-code: External provider routing (OpenAI, Gemini, Ollama)
     const _isExternalProvider = isExternalProvider()
+    // Debug: write to file to bypass Ink's output capture
+    try { const { appendFileSync } = await import('fs'); appendFileSync('/tmp/bett-debug.log', `[bett-code] provider=${process.env.BETT_CODE_PROVIDER} isExternal=${_isExternalProvider} model=${options.model}\n`) } catch (e) { try { const { appendFileSync: a } = await import('fs'); a('/tmp/bett-debug.log', `[debug-error] ${e}\n`) } catch {} }
     if (_isExternalProvider) {
       const { getModelProvider, getProviderConfig } = await import('./providers/registry.js')
       const { wrapAsAnthropicStream } = await import('./providers/stream-adapter.js')
@@ -1822,7 +1824,13 @@ async function* queryModel(
       attemptStartTimes.push(start)
       attemptNumber = 1
 
-      const result = await provider.createStream(params, signal)
+      let result: Awaited<ReturnType<typeof provider.createStream>>
+      try {
+        result = await provider.createStream(params, signal)
+      } catch (streamErr: any) {
+        try { const { appendFileSync } = await import('fs'); appendFileSync('/tmp/bett-debug.log', `[bett-code] createStream ERROR: ${streamErr.message}\n${streamErr.stack?.substring(0,500)}\n`) } catch {}
+        throw streamErr
+      }
       queryCheckpoint('query_response_headers_received')
       streamRequestId = result.requestId ?? null
 
@@ -1992,7 +2000,9 @@ async function* queryModel(
       let totalStallTime = 0
       let stallCount = 0
 
+      try { const { appendFileSync } = await import('fs'); appendFileSync('/tmp/bett-debug.log', `[claude.ts] starting stream iteration\n`) } catch {}
       for await (const part of stream) {
+        try { const { appendFileSync } = await import('fs'); appendFileSync('/tmp/bett-debug.log', `[claude.ts] got part type=${part.type}\n`) } catch {}
         resetStreamIdleTimer()
         const now = Date.now()
 
@@ -2266,6 +2276,8 @@ async function* queryModel(
             break
           }
           case 'message_delta': {
+            try { const { appendFileSync } = await import('fs'); appendFileSync('/tmp/bett-debug.log', `[claude.ts] message_delta handler start, stop_reason=${part.delta?.stop_reason}\n`) } catch {}
+            try {
             usage = updateUsage(usage, part.usage)
             // Capture research from message_delta if available (internal only).
             // Always overwrite with the latest value. Also write back to
@@ -2346,6 +2358,10 @@ async function* queryModel(
               })
             }
             break
+            } catch (mdErr: any) {
+              try { const { appendFileSync } = await import('fs'); appendFileSync('/tmp/bett-debug.log', `[claude.ts] message_delta ERROR: ${mdErr.message}\n${mdErr.stack?.substring(0,300)}\n`) } catch {}
+              throw mdErr
+            }
           }
           case 'message_stop':
             break
@@ -2457,6 +2473,7 @@ async function* queryModel(
         responseHeaders = resp.headers
       }
     } catch (streamingError) {
+      try { const { appendFileSync } = await import('fs'); appendFileSync('/tmp/bett-debug.log', `[claude.ts] STREAMING CATCH: ${(streamingError as any)?.message}\n${(streamingError as any)?.stack?.substring(0,500)}\n`) } catch {}
       // Clear the idle timeout watchdog on error path too
       clearStreamIdleTimers()
 

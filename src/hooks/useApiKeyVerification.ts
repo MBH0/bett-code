@@ -23,6 +23,10 @@ export type ApiKeyVerificationResult = {
 
 export function useApiKeyVerification(): ApiKeyVerificationResult {
   const [status, setStatus] = useState<VerificationStatus>(() => {
+    // bett-code: skip Anthropic API key verification for external providers
+    if (process.env.BETT_CODE_PROVIDER && process.env.BETT_CODE_PROVIDER !== 'anthropic') {
+      return 'valid'
+    }
     if (!isAnthropicAuthEnabled() || isClaudeAISubscriber()) {
       return 'valid'
     }
@@ -41,6 +45,11 @@ export function useApiKeyVerification(): ApiKeyVerificationResult {
   const [error, setError] = useState<Error | null>(null)
 
   const verify = useCallback(async (): Promise<void> => {
+    // bett-code: skip verification for external providers
+    if (process.env.BETT_CODE_PROVIDER && process.env.BETT_CODE_PROVIDER !== 'anthropic') {
+      setStatus('valid')
+      return
+    }
     if (!isAnthropicAuthEnabled() || isClaudeAISubscriber()) {
       setStatus('valid')
       return

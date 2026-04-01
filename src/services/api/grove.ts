@@ -155,6 +155,10 @@ export async function updateGroveSettings(
  * false and the Grove dialog won't show until the next session.
  */
 export async function isQualifiedForGrove(): Promise<boolean> {
+  // bett-code: skip Grove for external providers
+  if (process.env.BETT_CODE_PROVIDER && process.env.BETT_CODE_PROVIDER !== 'anthropic') {
+    return false
+  }
   if (!isConsumerSubscriber()) {
     return false
   }

@@ -82,6 +82,8 @@ export class OpenAICompatProvider implements ModelProvider {
     const openaiParams = anthropicParamsToOpenAI(params)
     openaiParams.stream = true
 
+    try { require('fs').appendFileSync('/tmp/bett-debug.log', `[openai] tools=${openaiParams.tools?.length ?? 0} messages=${openaiParams.messages?.length ?? 0} model=${openaiParams.model}\n`) } catch {}
+
     const response = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -165,6 +167,7 @@ export class OpenAICompatProvider implements ModelProvider {
 
           // Handle tool calls
           if (choice.delta.tool_calls) {
+            try { require('fs').appendFileSync('/tmp/bett-debug.log', `[openai] tool_call delta: ${JSON.stringify(choice.delta.tool_calls)}\n`) } catch {}
             for (const tc of choice.delta.tool_calls) {
               const tcIndex = tc.index
 

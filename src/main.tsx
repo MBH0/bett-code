@@ -1478,7 +1478,7 @@ async function run(): Promise<CommanderCommand> {
           const {
             isComputerUseMCPServer,
             COMPUTER_USE_MCP_SERVER_NAME
-          } = await import('src/utils/computerUse/common.js');
+          } = await import('./utils/computerUse/common.js');
           if (nonSdkConfigNames.some(isComputerUseMCPServer)) {
             reservedNameError = `Invalid MCP configuration: "${COMPUTER_USE_MCP_SERVER_NAME}" is a reserved MCP name.`;
           }
@@ -1609,11 +1609,11 @@ async function run(): Promise<CommanderCommand> {
       try {
         const {
           getChicagoEnabled
-        } = await import('src/utils/computerUse/gates.js');
+        } = await import('./utils/computerUse/gates.js');
         if (getChicagoEnabled()) {
           const {
             setupComputerUseMCP
-          } = await import('src/utils/computerUse/setup.js');
+          } = await import('./utils/computerUse/setup.js');
           const {
             mcpConfig,
             allowedTools: cuTools
@@ -2611,10 +2611,14 @@ async function run(): Promise<CommanderCommand> {
       sessionStartHooksPromise?.catch(() => {});
       profileCheckpoint('before_validateForceLoginOrg');
       // Validate org restriction for non-interactive sessions
-      const orgValidation = await validateForceLoginOrg();
-      if (!orgValidation.valid) {
-        process.stderr.write(orgValidation.message + '\n');
-        process.exit(1);
+      if (process.env.BETT_CODE_PROVIDER && process.env.BETT_CODE_PROVIDER !== 'anthropic') {
+        // skip org validation for external providers
+      } else {
+        const orgValidation = await validateForceLoginOrg();
+        if (!orgValidation.valid) {
+          process.stderr.write(orgValidation.message + '\n');
+          process.exit(1);
+        }
       }
 
       // Headless mode supports all prompt commands and some local commands
@@ -2821,12 +2825,70 @@ async function run(): Promise<CommanderCommand> {
         }
       }
       logSessionTelemetry();
+
+      // bett-code: For external providers in -p mode, use direct API call
+      if (process.env.BETT_CODE_PROVIDER && process.env.BETT_CODE_PROVIDER !== 'anthropic' && (typeof inputPrompt === 'string')) {
+        const { getProviderConfig } = await import('./services/api/providers/registry.js')
+        const providerConfig = getProviderConfig()
+        providerConfig.model = options.model || process.env.ANTHROPIC_MODEL || 'gpt-4o'
+        const baseUrl = process.env.BETT_CODE_PROVIDER_BASE_URL || 'https://api.openai.com/v1'
+        const apiKey = process.env.BETT_CODE_PROVIDER_API_KEY || ''
+
+        // Build system prompt
+        const { getSystemPrompt } = await import('./constants/prompts.js')
+        const systemParts = await getSystemPrompt(tools, providerConfig.model)
+        const systemPrompt = systemParts.join('\n')
+
+        const response = await fetch(`${baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+          body: JSON.stringify({
+            model: providerConfig.model,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: inputPrompt },
+            ],
+            max_tokens: 16384,
+            stream: true,
+          }),
+        })
+
+        if (!response.ok) {
+          const err = await response.text()
+          process.stderr.write(`API Error ${response.status}: ${err}\n`)
+          process.exit(1)
+        }
+
+        const reader = (response.body as ReadableStream<Uint8Array>).getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop() || ''
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue
+            const data = line.slice(6).trim()
+            if (data === '[DONE]') continue
+            try {
+              const chunk = JSON.parse(data)
+              const content = chunk.choices?.[0]?.delta?.content
+              if (content) process.stdout.write(content)
+            } catch {}
+          }
+        }
+        process.stdout.write('\n')
+        process.exit(0)
+      }
+
       profileCheckpoint('before_print_import');
       const {
         runHeadless
-      } = await import('src/cli/print.js');
+      } = await import('./cli/print.js');
       profileCheckpoint('after_print_import');
-      void runHeadless(inputPrompt, () => headlessStore.getState(), headlessStore.setState, commandsHeadless, tools, sdkMcpConfigs, agentDefinitions.activeAgents, {
+      await runHeadless(inputPrompt, () => headlessStore.getState(), headlessStore.setState, commandsHeadless, tools, sdkMcpConfigs, agentDefinitions.activeAgents, {
         continue: options.continue,
         resume: options.resume,
         verbose: verbose,
@@ -4362,7 +4424,7 @@ async function run(): Promise<CommanderCommand> {
   program.command('update').alias('upgrade').description('Check for updates and install if available').action(async () => {
     const {
       update
-    } = await import('src/cli/update.js');
+    } = await import('./cli/update.js');
     await update();
   });
 
@@ -4371,7 +4433,7 @@ async function run(): Promise<CommanderCommand> {
     program.command('up').description('[ANT-ONLY] Initialize or upgrade the local dev environment using the "# claude up" section of the nearest CLAUDE.md').action(async () => {
       const {
         up
-      } = await import('src/cli/up.js');
+      } = await import('./cli/up.js');
       await up();
     });
   }
@@ -4386,7 +4448,7 @@ async function run(): Promise<CommanderCommand> {
     }) => {
       const {
         rollback
-      } = await import('src/cli/rollback.js');
+      } = await import('./cli/rollback.js');
       await rollback(target, options);
     });
   }

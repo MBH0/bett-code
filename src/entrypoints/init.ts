@@ -87,6 +87,11 @@ export const init = memoize(async (): Promise<void> => {
     setupGracefulShutdown()
     profileCheckpoint('init_after_graceful_shutdown')
 
+    // bett-code: skip network-dependent init for external providers
+    if (process.env.BETT_CODE_PROVIDER && process.env.BETT_CODE_PROVIDER !== 'anthropic') {
+      return
+    }
+
     // Initialize 1P event logging (no security concerns, but deferred to avoid
     // loading OpenTelemetry sdk-logs at startup). growthbook.js is already in
     // the module cache by this point (firstPartyEventLogger imports it), so the

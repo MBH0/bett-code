@@ -553,12 +553,15 @@ export async function runHeadless(
   // Start headless profiler for first turn
   headlessProfilerStartTurn()
   headlessProfilerCheckpoint('runHeadless_entry')
+  try { const fs = await import('fs'); fs.appendFileSync('/tmp/bett-debug.log', `[print.ts] runHeadless entered\n`) } catch {}
 
   // Check Grove requirements for non-interactive consumer subscribers
+  try { const fs = await import('fs'); fs.appendFileSync('/tmp/bett-debug.log', `[print.ts] before grove check\n`) } catch {}
   if (await isQualifiedForGrove()) {
     await checkGroveForNonInteractive()
   }
   headlessProfilerCheckpoint('after_grove_check')
+  try { const fs = await import('fs'); fs.appendFileSync('/tmp/bett-debug.log', `[print.ts] after grove check\n`) } catch {}
 
   // Initialize GrowthBook so feature flags take effect in headless mode.
   // Without this, the disk cache is empty and all flags fall back to defaults.
@@ -584,6 +587,7 @@ export async function runHeadless(
     return
   }
 
+  try { const fs = await import('fs'); fs.appendFileSync('/tmp/bett-debug.log', `[print.ts] before structuredIO\n`) } catch {}
   const structuredIO = getStructuredIO(inputPrompt, options)
 
   // When emitting NDJSON for SDK clients, any stray write to stdout (debug
@@ -678,6 +682,7 @@ export async function runHeadless(
   }
 
   headlessProfilerCheckpoint('before_loadInitialMessages')
+  try { const fs = await import('fs'); fs.appendFileSync('/tmp/bett-debug.log', `[print.ts] before loadInitialMessages\n`) } catch {}
   const appState = getAppState()
   const {
     messages: initialMessages,
@@ -693,6 +698,8 @@ export async function runHeadless(
     sessionStartHooksPromise: options.sessionStartHooksPromise,
     restoredWorkerState: structuredIO.restoredWorkerState,
   })
+
+  try { const fs = await import('fs'); fs.appendFileSync('/tmp/bett-debug.log', `[print.ts] after loadInitialMessages, msgs=${initialMessages?.length}\n`) } catch {}
 
   // SessionStart hooks can emit initialUserMessage — the first user turn for
   // headless orchestrator sessions where stdin is empty and additionalContext
@@ -730,6 +737,7 @@ export async function runHeadless(
   // If a loadInitialMessages error path triggered it, bail early to avoid
   // unnecessary work while the process winds down.
   if (initialMessages.length === 0 && process.exitCode !== undefined) {
+    try { const fs = await import('fs'); fs.appendFileSync('/tmp/bett-debug.log', `[print.ts] EARLY RETURN: msgs=0, exitCode=${process.exitCode}\n`) } catch {}
     return
   }
 
@@ -1191,6 +1199,7 @@ function runHeadlessStreaming(
     })
   }
 
+  try { require('fs').appendFileSync('/tmp/bett-debug.log', `[print.ts] before modelOptions\n`) } catch {}
   const modelOptions = getModelOptions()
   const modelInfos = modelOptions.map(option => {
     const modelId = option.value === null ? 'default' : option.value
@@ -2144,6 +2153,7 @@ function runHeadlessStreaming(
           // inside the closure.
           const cmd = command
           await runWithWorkload(cmd.workload ?? options.workload, async () => {
+            try { const fs = await import('fs'); fs.appendFileSync('/tmp/bett-debug.log', `[print.ts] calling ask()\n`) } catch {}
             for await (const message of ask({
               commands: uniqBy(
                 [...currentCommands, ...appState.mcp.commands],
@@ -2813,7 +2823,9 @@ function runHeadlessStreaming(
   void (async () => {
     let initialized = false
     logForDiagnosticsNoPII('info', 'cli_message_loop_started')
+    try { require('fs').appendFileSync('/tmp/bett-debug.log', `[print.ts] starting input loop\n`) } catch {}
     for await (const message of structuredIO.structuredInput) {
+      try { require('fs').appendFileSync('/tmp/bett-debug.log', `[print.ts] got message type=${message.type}\n`) } catch {}
       // Non-user events are handled inline (no queue). started→completed in
       // the same tick carries no information, so only fire completed.
       // control_response is reported by StructuredIO.processLine (which also
@@ -4903,6 +4915,12 @@ async function loadInitialMessages(
     restoredWorkerState: Promise<SessionExternalMetadata | null>
   },
 ): Promise<LoadInitialMessagesResult> {
+  try { const fs = await import('fs'); fs.appendFileSync('/tmp/bett-debug.log', `[loadInitialMessages] entered, SIMPLE=${process.env.CLAUDE_CODE_SIMPLE}, continue=${options.continue}, resume=${options.resume}\n`) } catch {}
+  // bett-code: skip everything for external providers in simple mode
+  if (process.env.CLAUDE_CODE_SIMPLE === '1' && !options.continue && !options.resume) {
+    try { const fs = await import('fs'); fs.appendFileSync('/tmp/bett-debug.log', `[loadInitialMessages] early return (SIMPLE mode)\n`) } catch {}
+    return { messages: [] }
+  }
   const persistSession = !isSessionPersistenceDisabled()
   // Handle continue in print mode
   if (options.continue) {
@@ -5005,7 +5023,7 @@ async function loadInitialMessages(
         processMessagesForTeleportResume,
         teleportResumeCodeSession,
         validateGitState,
-      } = await import('src/utils/teleport.js')
+      } = await import('../utils/teleport.js')
       await validateGitState()
       const teleportResult = await teleportResumeCodeSession(options.teleport)
       const { branchError } = await checkOutTeleportedSessionBranch(
@@ -5190,6 +5208,9 @@ async function loadInitialMessages(
   // Join the SessionStart hooks promise kicked in main.tsx (or run fresh if
   // it wasn't kicked — e.g. --continue with no prior session falls through
   // here with sessionStartHooksPromise undefined because main.tsx guards on continue)
+  if (process.env.CLAUDE_CODE_SIMPLE === '1') {
+    return { messages: [] }
+  }
   return {
     messages: await (options.sessionStartHooksPromise ??
       processSessionStartHooks('startup')),

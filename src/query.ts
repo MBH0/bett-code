@@ -226,6 +226,7 @@ export async function* query(
   | ToolUseSummaryMessage,
   Terminal
 > {
+  try { const fs = await import('fs'); fs.appendFileSync('/tmp/bett-debug.log', `[query.ts] query() entered\n`) } catch {}
   const consumedCommandUuids: string[] = []
   const terminal = yield* queryLoop(params, consumedCommandUuids)
   // Only reached if queryLoop returned normally. Skipped on throw (error
@@ -656,6 +657,7 @@ async function* queryLoop(
         try {
           let streamingFallbackOccured = false
           queryCheckpoint('query_api_streaming_start')
+          try { const fs = await import('fs'); fs.appendFileSync('/tmp/bett-debug.log', `[query.ts] calling callModel\n`) } catch {}
           for await (const message of deps.callModel({
             messages: prependUserContext(messagesForQuery, userContext),
             systemPrompt: fullSystemPrompt,
