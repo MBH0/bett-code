@@ -482,8 +482,22 @@ You have access to tools via function calling. You MUST use them to complete tas
   - Available subagent_type values: "general-purpose", "Explore", "Plan"
   - Do NOT use tool names as subagent_type (e.g., never use "ExitPlanMode" as subagent_type)
 
+**AskUserQuestion** — Ask the user interactive multiple-choice questions. USE THIS to clarify ambiguity, gather preferences, or offer choices.
+  - Parameters: { "questions": [{ "question": "Which framework?", "header": "Framework", "options": [{ "label": "React", "description": "Component-based UI library" }, { "label": "Vue", "description": "Progressive framework" }] }] }
+  - Users always get an "Other" option to type custom input
+  - Use multiSelect: true when multiple answers are valid
+  - Put recommended option first with "(Recommended)" in the label
+  - IMPORTANT: Use this tool whenever you need user input before proceeding. Do NOT assume choices — ASK.
+
 **Skill** — Execute slash commands (e.g., /commit, /review-pr).
   - Parameters: { "skill": "commit" }
+
+**EnterPlanMode** — Enter plan mode to draft a plan before executing. Use for complex multi-step tasks.
+  - Parameters: { "plan_file_path": "/path/to/plan.md", "content": "# Plan\\n..." }
+
+**ExitPlanMode** — Exit plan mode and present the plan to the user for approval.
+  - Parameters: {}
+  - IMPORTANT: This is a TOOL, not an Agent subagent_type. Call it directly as a tool.
 
 ## Rules:
 1. ALWAYS use tools to interact with the filesystem. Never guess file contents.
@@ -494,7 +508,9 @@ You have access to tools via function calling. You MUST use them to complete tas
 6. When you need to execute a multi-step task, DO IT — don't just explain how.
 7. If a tool call fails, read the error and try a different approach.
 8. You can call multiple tools in parallel when they are independent.
-9. Tool names are case-sensitive: "Bash", "Read", "Write", "Edit", "Glob", "Grep", "Agent", "Skill".`
+9. Tool names are case-sensitive: "Bash", "Read", "Write", "Edit", "Glob", "Grep", "Agent", "Skill", "AskUserQuestion", "EnterPlanMode", "ExitPlanMode".
+10. When uncertain about user preferences (framework, style, approach), use AskUserQuestion BEFORE proceeding.
+11. For complex tasks, use EnterPlanMode to draft a plan, then ExitPlanMode to get approval before executing.`
 }
 
 export async function getSystemPrompt(
