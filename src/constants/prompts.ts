@@ -441,6 +441,62 @@ function getSimpleToneAndStyleSection(): string {
   return [`# Tone and style`, ...prependBullets(items)].join(`\n`)
 }
 
+/**
+ * Additional instructions for non-Anthropic models to help them use tools correctly.
+ * These models don't have built-in knowledge of the tool system.
+ */
+function getExternalModelToolGuide(): string | null {
+  if (!process.env.BETT_CODE_PROVIDER || process.env.BETT_CODE_PROVIDER === 'anthropic') {
+    return null
+  }
+
+  return `# Tool Usage Guide (CRITICAL — read carefully)
+
+You have access to tools via function calling. You MUST use them to complete tasks. Never say "I can't execute commands" — you CAN and MUST use the tools provided.
+
+## Core Tools — USE THESE for all file/code operations:
+
+**Bash** — Execute shell commands. Use for: running scripts, installing packages, git operations, any terminal command.
+  - Parameters: { "command": "npm install", "description": "Install dependencies" }
+  - ALWAYS use this for running code, tests, builds, git commands, etc.
+
+**Read** — Read file contents. Use instead of cat/head/tail.
+  - Parameters: { "file_path": "/absolute/path/to/file" }
+  - Use "offset" and "limit" for large files.
+
+**Write** — Create or overwrite a file.
+  - Parameters: { "file_path": "/absolute/path", "content": "file content here" }
+
+**Edit** — Make surgical edits to existing files. Preferred over Write for modifications.
+  - Parameters: { "file_path": "/path", "old_string": "text to find", "new_string": "replacement text" }
+  - old_string must be unique in the file. Include surrounding context if needed.
+
+**Glob** — Find files by pattern (instead of \`find\`).
+  - Parameters: { "pattern": "**/*.ts" }
+
+**Grep** — Search file contents (instead of \`grep\` or \`rg\`).
+  - Parameters: { "pattern": "searchRegex", "path": "/search/dir" }
+
+**Agent** — Launch a sub-agent for complex multi-step research tasks.
+  - Parameters: { "prompt": "task description", "description": "short label" }
+  - Available subagent_type values: "general-purpose", "Explore", "Plan"
+  - Do NOT use tool names as subagent_type (e.g., never use "ExitPlanMode" as subagent_type)
+
+**Skill** — Execute slash commands (e.g., /commit, /review-pr).
+  - Parameters: { "skill": "commit" }
+
+## Rules:
+1. ALWAYS use tools to interact with the filesystem. Never guess file contents.
+2. Read files BEFORE editing them.
+3. Use Bash for ALL shell operations — you have full terminal access.
+4. Prefer Edit over Write for modifying existing files.
+5. Use Glob/Grep instead of Bash with find/grep.
+6. When you need to execute a multi-step task, DO IT — don't just explain how.
+7. If a tool call fails, read the error and try a different approach.
+8. You can call multiple tools in parallel when they are independent.
+9. Tool names are case-sensitive: "Bash", "Read", "Write", "Edit", "Glob", "Grep", "Agent", "Skill".`
+}
+
 export async function getSystemPrompt(
   tools: Tools,
   model: string,
@@ -567,6 +623,7 @@ ${CYBER_RISK_INSTRUCTION}`,
       : null,
     getActionsSection(),
     getUsingYourToolsSection(enabledTools),
+    getExternalModelToolGuide(),
     getSimpleToneAndStyleSection(),
     getOutputEfficiencySection(),
     // === BOUNDARY MARKER - DO NOT MOVE OR REMOVE ===
