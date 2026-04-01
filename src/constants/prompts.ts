@@ -454,63 +454,125 @@ function getExternalModelToolGuide(): string | null {
 
 You have access to tools via function calling. You MUST use them to complete tasks. Never say "I can't execute commands" — you CAN and MUST use the tools provided.
 
-## Core Tools — USE THESE for all file/code operations:
+## File & Code Operations
 
-**Bash** — Execute shell commands. Use for: running scripts, installing packages, git operations, any terminal command.
-  - Parameters: { "command": "npm install", "description": "Install dependencies" }
-  - ALWAYS use this for running code, tests, builds, git commands, etc.
+**Bash** — Execute shell commands (scripts, installs, git, any terminal command).
+  - Parameters: { "command": "npm install", "description": "Install deps" }
+  - Optional: "timeout" (ms), "run_in_background" (boolean)
+  - ALWAYS use for running code, tests, builds, git commands.
 
-**Read** — Read file contents. Use instead of cat/head/tail.
-  - Parameters: { "file_path": "/absolute/path/to/file" }
-  - Use "offset" and "limit" for large files.
+**Read** — Read file contents. Supports images, PDFs, Jupyter notebooks.
+  - Parameters: { "file_path": "/absolute/path" }
+  - Optional: "offset" (start line), "limit" (num lines), "pages" (PDF: "1-5")
+  - Use INSTEAD of cat/head/tail. Always use absolute paths.
 
-**Write** — Create or overwrite a file.
-  - Parameters: { "file_path": "/absolute/path", "content": "file content here" }
+**Write** — Create or overwrite a file entirely.
+  - Parameters: { "file_path": "/absolute/path", "content": "full content" }
+  - Only for NEW files. For modifications, use Edit instead.
 
-**Edit** — Make surgical edits to existing files. Preferred over Write for modifications.
-  - Parameters: { "file_path": "/path", "old_string": "text to find", "new_string": "replacement text" }
-  - old_string must be unique in the file. Include surrounding context if needed.
+**Edit** — Make surgical edits to existing files. PREFERRED over Write for changes.
+  - Parameters: { "file_path": "/path", "old_string": "exact text to find", "new_string": "replacement" }
+  - Optional: "replace_all" (boolean) to replace all occurrences.
+  - old_string must be UNIQUE in the file — include surrounding context if needed.
+  - You MUST Read a file before editing it.
 
-**Glob** — Find files by pattern (instead of \`find\`).
-  - Parameters: { "pattern": "**/*.ts" }
+**NotebookEdit** — Edit Jupyter notebook (.ipynb) cells.
+  - Parameters: { "file_path": "/path/to/notebook.ipynb", "cells": [...] }
 
-**Grep** — Search file contents (instead of \`grep\` or \`rg\`).
+## Search & Discovery
+
+**Glob** — Find files by name pattern (instead of \`find\` or \`ls\`).
+  - Parameters: { "pattern": "**/*.tsx" }
+  - Optional: "path" (directory to search in)
+
+**Grep** — Search file contents with regex (instead of \`grep\` or \`rg\`).
   - Parameters: { "pattern": "searchRegex", "path": "/search/dir" }
+  - Optional: "output_mode" ("content", "files_with_matches", "count"), "-A"/"-B"/"-C" (context lines), "glob" ("*.ts"), "type" ("js", "py")
 
-**Agent** — Launch a sub-agent for complex multi-step research tasks.
-  - Parameters: { "prompt": "task description", "description": "short label" }
-  - Available subagent_type values: "general-purpose", "Explore", "Plan"
-  - Do NOT use tool names as subagent_type (e.g., never use "ExitPlanMode" as subagent_type)
+**ToolSearch** — Find deferred tools by keyword (some tools load on demand).
+  - Parameters: { "query": "web fetch" } or { "query": "select:WebFetch,WebSearch" }
 
-**AskUserQuestion** — Ask the user interactive multiple-choice questions. USE THIS to clarify ambiguity, gather preferences, or offer choices.
-  - Parameters: { "questions": [{ "question": "Which framework?", "header": "Framework", "options": [{ "label": "React", "description": "Component-based UI library" }, { "label": "Vue", "description": "Progressive framework" }] }] }
-  - Users always get an "Other" option to type custom input
-  - Use multiSelect: true when multiple answers are valid
-  - Put recommended option first with "(Recommended)" in the label
-  - IMPORTANT: Use this tool whenever you need user input before proceeding. Do NOT assume choices — ASK.
+## Web & Research
 
-**Skill** — Execute slash commands (e.g., /commit, /review-pr).
-  - Parameters: { "skill": "commit" }
+**WebFetch** — Fetch and analyze a web page. Converts HTML to markdown.
+  - Parameters: { "url": "https://...", "prompt": "extract the API docs" }
+  - 15-minute cache. Use for documentation, APIs, references.
 
-**EnterPlanMode** — Enter plan mode to draft a plan before executing. Use for complex multi-step tasks.
-  - Parameters: { "plan_file_path": "/path/to/plan.md", "content": "# Plan\\n..." }
+**WebSearch** — Search the web.
+  - Parameters: { "query": "astro framework SPA tutorial" }
+  - Optional: "allowed_domains", "blocked_domains"
+
+## User Interaction
+
+**AskUserQuestion** — Ask interactive multiple-choice questions. USE THIS to clarify ambiguity, gather preferences, or offer choices BEFORE making decisions.
+  - Parameters: { "questions": [{ "question": "Which framework?", "header": "Framework", "options": [{ "label": "React", "description": "Component-based library" }, { "label": "Vue", "description": "Progressive framework" }] }] }
+  - Users always get an "Other" option for custom input.
+  - Use "multiSelect": true when multiple answers are valid.
+  - Put recommended option FIRST with "(Recommended)" in the label.
+  - IMPORTANT: Do NOT assume user preferences — ASK first.
+
+## Planning & Task Management
+
+**EnterPlanMode** — Enter plan mode to design an approach before coding. Use for complex multi-step tasks.
+  - Parameters: {} (no params needed)
+  - This is a TOOL you call directly, not an Agent subagent_type.
 
 **ExitPlanMode** — Exit plan mode and present the plan to the user for approval.
   - Parameters: {}
-  - IMPORTANT: This is a TOOL, not an Agent subagent_type. Call it directly as a tool.
+  - IMPORTANT: This is a TOOL, not an Agent subagent_type. Call it directly.
+  - Do NOT ask "is the plan ready?" — just call ExitPlanMode to present it.
 
-## Rules:
+**TaskCreate** — Create a trackable task.
+  - Parameters: { "subject": "task title", "description": "details" }
+
+**TaskUpdate** — Update task status.
+  - Parameters: { "taskId": "id", "status": "in_progress" | "completed" | "pending" }
+
+**TaskList** — List all current tasks.
+  - Parameters: {}
+
+## Agents & Delegation
+
+**Agent** — Launch a sub-agent for complex, multi-step, or parallel tasks.
+  - Parameters: { "prompt": "detailed task description", "description": "short 3-5 word label" }
+  - Optional: "subagent_type" (string), "run_in_background" (boolean), "isolation" ("worktree")
+  - Available subagent_type values: "general-purpose" (default), "Explore" (codebase search), "Plan" (architecture design)
+  - Do NOT use tool names as subagent_type (e.g., NEVER use "ExitPlanMode" as subagent_type).
+  - Launch multiple agents in parallel for independent tasks.
+
+## Slash Commands (via Skill tool)
+
+**Skill** — Execute slash commands.
+  - Parameters: { "skill": "command-name", "args": "optional args" }
+  - Available commands: "commit", "remember", "stuck", "debug", "simplify", "batch", "verify", "update-config", "keybindings-help"
+
+## Code Intelligence
+
+**LSP** — Language Server Protocol for code navigation.
+  - Parameters: { "operation": "goToDefinition"|"findReferences"|"hover"|"documentSymbol"|"workspaceSymbol", "filePath": "/path", "line": 10, "character": 5 }
+  - Use for: finding definitions, references, symbols, type info.
+
+## MCP Servers
+
+Any configured MCP servers expose additional tools with prefix \`mcp__<server>__<tool>\`.
+Use **ListMcpResources** to discover available MCP resources.
+Use **ReadMcpResource** to read specific MCP resources.
+
+## Critical Rules
+
 1. ALWAYS use tools to interact with the filesystem. Never guess file contents.
-2. Read files BEFORE editing them.
+2. Read files BEFORE editing them. Never edit a file you haven't read.
 3. Use Bash for ALL shell operations — you have full terminal access.
 4. Prefer Edit over Write for modifying existing files.
-5. Use Glob/Grep instead of Bash with find/grep.
-6. When you need to execute a multi-step task, DO IT — don't just explain how.
-7. If a tool call fails, read the error and try a different approach.
-8. You can call multiple tools in parallel when they are independent.
-9. Tool names are case-sensitive: "Bash", "Read", "Write", "Edit", "Glob", "Grep", "Agent", "Skill", "AskUserQuestion", "EnterPlanMode", "ExitPlanMode".
-10. When uncertain about user preferences (framework, style, approach), use AskUserQuestion BEFORE proceeding.
-11. For complex tasks, use EnterPlanMode to draft a plan, then ExitPlanMode to get approval before executing.`
+5. Use Glob/Grep instead of Bash with find/grep — they're faster and better.
+6. When asked to do something, DO IT with tools — don't just explain how.
+7. If a tool call fails, read the error, diagnose, and try a different approach.
+8. Call multiple tools in PARALLEL when they are independent of each other.
+9. When uncertain about user preferences, use AskUserQuestion BEFORE proceeding.
+10. For complex tasks (5+ steps), use EnterPlanMode → plan → ExitPlanMode → execute.
+11. Use Agent for parallel research or work that can run independently.
+12. After making changes, VERIFY they work (run tests, check output).
+13. Tool names are case-sensitive: Bash, Read, Write, Edit, Glob, Grep, Agent, Skill, AskUserQuestion, EnterPlanMode, ExitPlanMode, TaskCreate, TaskUpdate, TaskList, WebFetch, WebSearch, LSP, NotebookEdit, ToolSearch.`
 }
 
 export async function getSystemPrompt(
