@@ -814,6 +814,14 @@ export function getAssistantMessageFromError(
     error instanceof Error &&
     error.message.toLowerCase().includes('x-api-key')
   ) {
+    // bett-code: don't convert external provider errors to "Not logged in"
+    if (process.env.BETT_CODE_PROVIDER && process.env.BETT_CODE_PROVIDER !== 'anthropic') {
+      return createAssistantAPIErrorMessage({
+        error: 'api_error',
+        content: `API Error: ${error.message}`,
+      })
+    }
+
     // In CCR mode, auth is via JWTs - this is likely a transient network issue
     if (isCCRMode()) {
       return createAssistantAPIErrorMessage({

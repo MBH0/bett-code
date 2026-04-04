@@ -159,21 +159,26 @@ if (process.argv.includes('--setting') || process.argv.includes('--settings')) {
   console.log('\\n  \\x1b[1mbett-code Settings\\x1b[0m\\n')
   console.log('  Select provider:')
   console.log('    1. OpenAI (gpt-4o, gpt-4-turbo)')
-  console.log('    2. Anthropic (claude-sonnet, claude-opus)')
-  console.log('    3. Gemini (gemini-pro, gemini-2.0-flash)')
-  console.log('    4. Ollama (local - llama3.1, codellama)')
+  console.log('    2. OpenRouter (any model via openrouter.ai)')
+  console.log('    3. Anthropic (claude-sonnet, claude-opus)')
+  console.log('    4. Gemini (gemini-pro, gemini-2.0-flash)')
+  console.log('    5. Ollama (local - llama3.1, codellama)')
+  console.log('    6. Custom OpenAI-compatible API')
   console.log()
 
-  const choice = await ask('  Choice [1-4]: ')
+  const choice = await ask('  Choice [1-6]: ')
   const providers = {
-    '1': { name: 'openai', needsKey: true, defaultModel: 'gpt-4o' },
-    '2': { name: 'anthropic', needsKey: true, defaultModel: 'claude-sonnet-4-5-20250514' },
-    '3': { name: 'gemini', needsKey: true, defaultModel: 'gemini-2.0-flash' },
-    '4': { name: 'ollama', needsKey: false, defaultModel: 'llama3.1' },
+    '1': { name: 'openai', needsKey: true, defaultModel: 'gpt-4o', defaultUrl: '' },
+    '2': { name: 'openai', needsKey: true, defaultModel: 'google/gemini-2.5-flash-preview', defaultUrl: 'https://openrouter.ai/api/v1' },
+    '3': { name: 'anthropic', needsKey: true, defaultModel: 'claude-sonnet-4-5-20250514', defaultUrl: '' },
+    '4': { name: 'gemini', needsKey: true, defaultModel: 'gemini-2.0-flash', defaultUrl: '' },
+    '5': { name: 'ollama', needsKey: false, defaultModel: 'llama3.1', defaultUrl: 'http://localhost:11434' },
+    '6': { name: 'openai', needsKey: true, defaultModel: 'gpt-4o', defaultUrl: '' },
   }
   const selected = providers[choice.trim()]
   if (!selected) { console.log('  Invalid choice.'); process.exit(1) }
-  console.log('\\n  Provider: \\x1b[32m' + selected.name + '\\x1b[0m')
+  const providerLabel = { '1': 'OpenAI', '2': 'OpenRouter', '3': 'Anthropic', '4': 'Gemini', '5': 'Ollama', '6': 'Custom' }[choice.trim()]
+  console.log('\\n  Provider: \\x1b[32m' + providerLabel + '\\x1b[0m')
 
   let apiKey = ''
   if (selected.needsKey) {
@@ -182,10 +187,16 @@ if (process.argv.includes('--setting') || process.argv.includes('--settings')) {
   }
   const modelInput = await ask('  Model [' + selected.defaultModel + ']: ')
   const model = modelInput.trim() || selected.defaultModel
-  let baseUrl = ''
-  if (selected.name === 'ollama') {
+  let baseUrl = selected.defaultUrl
+  if (choice.trim() === '5') {
     const u = await ask('  Ollama URL [http://localhost:11434]: ')
     baseUrl = u.trim() || 'http://localhost:11434'
+  } else if (choice.trim() === '6') {
+    const u = await ask('  Base URL: ')
+    if (!u.trim()) { console.log('  Base URL required for custom provider.'); process.exit(1) }
+    baseUrl = u.trim()
+  } else if (choice.trim() === '2') {
+    console.log('  Base URL: \\x1b[2mhttps://openrouter.ai/api/v1\\x1b[0m')
   }
   rl.close()
 

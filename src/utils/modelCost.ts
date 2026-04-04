@@ -229,6 +229,8 @@ function tokensToUSDCost(modelCosts: ModelCosts, usage: Usage): number {
 }
 
 export function getModelCosts(model: string, usage: Usage): ModelCosts {
+  // Guard against undefined/null model names
+  if (!model) return DEFAULT_UNKNOWN_MODEL_COST
   // bett-code: Ollama is free (local)
   if (process.env.BETT_CODE_PROVIDER === 'ollama') {
     return { inputTokens: 0, outputTokens: 0, promptCacheWriteTokens: 0, promptCacheReadTokens: 0, webSearchRequests: 0 }
@@ -239,6 +241,10 @@ export function getModelCosts(model: string, usage: Usage): ModelCosts {
   // Also check with prefix stripped (e.g. "openai/gpt-4o" → "gpt-4o")
   const stripped = model.includes('/') ? model.split('/').pop()! : ''
   if (stripped && EXTERNAL_MODEL_COSTS[stripped]) return EXTERNAL_MODEL_COSTS[stripped]
+  // bett-code: for external providers, return default cost instead of crashing
+  if (process.env.BETT_CODE_PROVIDER && process.env.BETT_CODE_PROVIDER !== 'anthropic') {
+    return DEFAULT_UNKNOWN_MODEL_COST
+  }
 
   const shortName = getCanonicalName(model)
 
@@ -273,8 +279,12 @@ function trackUnknownModelCost(model: string, shortName: ModelShortName): void {
 // Calculate the cost of a query in US dollars.
 // If the model's costs are not found, use the default model's costs.
 export function calculateUSDCost(resolvedModel: string, usage: Usage): number {
-  const modelCosts = getModelCosts(resolvedModel, usage)
-  return tokensToUSDCost(modelCosts, usage)
+  try {
+    const modelCosts = getModelCosts(resolvedModel, usage)
+    return tokensToUSDCost(modelCosts, usage)
+  } catch {
+    return 0
+  }
 }
 
 /**

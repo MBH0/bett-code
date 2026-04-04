@@ -98,6 +98,17 @@ export async function getAnthropicClient({
   fetchOverride?: ClientOptions['fetch']
   source?: string
 }): Promise<Anthropic> {
+  // bett-code: for external providers, return a stub client whose .beta.messages.create()
+  // returns an empty message. This lets side queries (token estimation, model capabilities,
+  // verifyApiKey) complete silently instead of crashing or hanging.
+  if (process.env.BETT_CODE_PROVIDER && process.env.BETT_CODE_PROVIDER !== 'anthropic') {
+    const emptyMsg = { id: 'msg_stub', type: 'message', role: 'assistant', content: [], model: model || 'stub', stop_reason: 'end_turn', stop_sequence: null, usage: { input_tokens: 0, output_tokens: 0 } }
+    const createFn = () => Promise.resolve(emptyMsg)
+    const withResponseFn = () => Promise.resolve({ data: emptyMsg, response: new Response(), request_id: null })
+    createFn.withResponse = withResponseFn
+    const messagesStub = { create: (..._args: unknown[]) => { const p = createFn() as any; p.withResponse = withResponseFn; return p } }
+    return { beta: { messages: messagesStub }, messages: messagesStub } as unknown as Anthropic
+  }
   const containerId = process.env.CLAUDE_CODE_CONTAINER_ID
   const remoteSessionId = process.env.CLAUDE_CODE_REMOTE_SESSION_ID
   const clientApp = process.env.CLAUDE_AGENT_SDK_CLIENT_APP
