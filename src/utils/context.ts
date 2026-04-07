@@ -33,7 +33,7 @@ export function is1mContextDisabled(): boolean {
 }
 
 export function has1mContext(model: string): boolean {
-  if (is1mContextDisabled()) {
+  if (!model || is1mContextDisabled()) {
     return false
   }
   return /\[1m\]/i.test(model)
@@ -150,6 +150,7 @@ export function getModelMaxOutputTokens(model: string): {
   default: number
   upperLimit: number
 } {
+  if (!model) return { default: MAX_OUTPUT_TOKENS_DEFAULT, upperLimit: MAX_OUTPUT_TOKENS_UPPER_LIMIT }
   let defaultTokens: number
   let upperLimit: number
 

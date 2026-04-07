@@ -187,7 +187,7 @@ function formatModelUsage(): string {
   // Accumulate usage by short name
   const usageByShortName: { [shortName: string]: ModelUsage } = {}
   for (const [model, usage] of Object.entries(modelUsageMap)) {
-    const shortName = getCanonicalName(model)
+    let shortName: string; try { shortName = getCanonicalName(model) } catch { shortName = model }
     if (!usageByShortName[shortName]) {
       usageByShortName[shortName] = {
         inputTokens: 0,

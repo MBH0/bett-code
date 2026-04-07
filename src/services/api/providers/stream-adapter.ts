@@ -116,6 +116,7 @@ export function contentBlockStopEvent(
 export function messageDeltaEvent(
   stopReason: string,
   outputTokens: number,
+  inputTokens?: number,
 ): BetaRawMessageStreamEvent {
   return {
     type: 'message_delta',
@@ -124,7 +125,10 @@ export function messageDeltaEvent(
       stop_sequence: null,
     },
     usage: {
+      input_tokens: inputTokens ?? 0,
       output_tokens: outputTokens,
+      cache_read_input_tokens: 0,
+      cache_creation_input_tokens: 0,
     },
   } as unknown as BetaRawMessageStreamEvent
 }

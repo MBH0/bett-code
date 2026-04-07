@@ -32,6 +32,7 @@ export const get3PModelCapabilityOverride = memoize(
     if (getAPIProvider() === 'firstParty') {
       return undefined
     }
+    if (!model) return undefined
     const m = model.toLowerCase()
     for (const tier of TIERS) {
       const pinned = process.env[tier.modelEnvVar]
@@ -46,5 +47,5 @@ export const get3PModelCapabilityOverride = memoize(
     }
     return undefined
   },
-  (model, capability) => `${model.toLowerCase()}:${capability}`,
+  (model, capability) => `${(model || '').toLowerCase()}:${capability}`,
 )

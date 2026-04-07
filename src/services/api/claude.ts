@@ -3323,6 +3323,45 @@ export async function queryHaiku({
   signal: AbortSignal
   options: HaikuOptions
 }): Promise<AssistantMessage> {
+  // bett-code: for external providers, use the configured model directly via fetch
+  if (process.env.BETT_CODE_PROVIDER && process.env.BETT_CODE_PROVIDER !== 'anthropic') {
+    const baseUrl = process.env.BETT_CODE_PROVIDER_BASE_URL || 'https://api.openai.com/v1'
+    const apiKey = process.env.BETT_CODE_PROVIDER_API_KEY || ''
+    const model = process.env.ANTHROPIC_MODEL || 'gpt-4o'
+    const sysText = systemPrompt.join('\n')
+    try {
+      const response = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: 'system', content: sysText }, { role: 'user', content: userPrompt }],
+          max_tokens: 4096,
+          stream: false,
+        }),
+        signal,
+      })
+      const data: any = await response.json()
+      const text = data?.choices?.[0]?.message?.content ?? ''
+      return {
+        type: 'assistant',
+        uuid: crypto.randomUUID() as any,
+        timestamp: new Date().toISOString(),
+        message: { id: 'msg_' + Date.now(), type: 'message', role: 'assistant', model, content: [{ type: 'text', text }], stop_reason: 'end_turn', stop_sequence: null, usage: { input_tokens: 0, output_tokens: 0 } } as any,
+        costUSD: 0,
+        durationMs: 0,
+      } as AssistantMessage
+    } catch (e: any) {
+      return {
+        type: 'assistant',
+        uuid: crypto.randomUUID() as any,
+        timestamp: new Date().toISOString(),
+        message: { id: 'msg_err', type: 'message', role: 'assistant', model, content: [{ type: 'text', text: 'Error: ' + e.message }], stop_reason: 'end_turn', stop_sequence: null, usage: { input_tokens: 0, output_tokens: 0 } } as any,
+        costUSD: 0,
+        durationMs: 0,
+      } as AssistantMessage
+    }
+  }
   const result = await withVCR(
     [
       createUserMessage({

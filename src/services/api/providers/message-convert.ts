@@ -186,6 +186,7 @@ export function anthropicParamsToOpenAI(
 
   // Clamp max_tokens to model limits (OpenAI models typically support less than Anthropic)
   const modelMaxTokens: Record<string, number> = {
+    'gpt-4.1': 32768, 'gpt-4.1-mini': 32768, 'gpt-4.1-nano': 16384,
     'gpt-4o': 16384, 'gpt-4o-mini': 16384, 'gpt-4-turbo': 4096,
     'gpt-4': 8192, 'gpt-3.5-turbo': 4096, 'o1': 100000, 'o1-mini': 65536,
     'o3': 100000, 'o3-mini': 65536, 'o4-mini': 100000,

@@ -231,13 +231,16 @@ function SetModelAndClose({
   return null;
 }
 function isKnownAlias(model: string): boolean {
+  if (!model) return false
   return (MODEL_ALIASES as readonly string[]).includes(model.toLowerCase().trim());
 }
 function isOpus1mUnavailable(model: string): boolean {
+  if (!model) return false
   const m = model.toLowerCase();
   return !checkOpus1mAccess() && !isOpus1mMergeEnabled() && m.includes('opus') && m.includes('[1m]');
 }
 function isSonnet1mUnavailable(model: string): boolean {
+  if (!model) return false
   const m = model.toLowerCase();
   // Warn about Sonnet and Sonnet 4.6, but not Sonnet 4.5 since that had
   // a different access criteria.

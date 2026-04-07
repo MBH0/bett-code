@@ -82,6 +82,7 @@ function applyModelOverrides(ms: ModelStrings): ModelStrings {
  * aren't loaded yet).
  */
 export function resolveOverriddenModel(modelId: string): string {
+  if (!modelId) return ''
   let overrides: Record<string, string> | undefined
   try {
     overrides = getInitialSettings().modelOverrides

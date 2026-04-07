@@ -73,7 +73,7 @@ const loadCache = memoize(
 )
 
 export function getModelCapability(model: string): ModelCapability | undefined {
-  if (!isModelCapabilitiesEligible()) return undefined
+  if (!model || !isModelCapabilitiesEligible()) return undefined
   const cached = loadCache(getCachePath())
   if (!cached || cached.length === 0) return undefined
   const m = model.toLowerCase()

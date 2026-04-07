@@ -79,7 +79,7 @@ const result = await Bun.build({
     '@opentelemetry/exporter-prometheus', '@opentelemetry/exporter-trace-otlp-grpc',
     '@opentelemetry/exporter-trace-otlp-http', '@opentelemetry/exporter-trace-otlp-proto',
     // Optional deps
-    'ws', 'undici', 'tree-kill', 'turndown', 'xss', 'yaml', 'fflate',
+    'ws', 'undici', 'tree-kill', 'xss', 'yaml', 'fflate',
     'vscode-jsonrpc/node.js', 'react-reconciler/constants.js',
   ],
 })
@@ -204,6 +204,8 @@ if (process.argv.includes('--setting') || process.argv.includes('--settings')) {
   const cfgPath = join(process.env.CLAUDE_CONFIG_DIR, '.claude.json')
   let cfg = {}
   try { cfg = JSON.parse(readFileSync(cfgPath, 'utf8')) } catch {}
+  // Clean old settings before applying new ones
+  delete cfg.bettProviderBaseUrl
   Object.assign(cfg, {
     bettProvider: selected.name, bettProviderApiKey: apiKey.trim(), bettModel: model,
     hasCompletedOnboarding: true, numStartups: cfg.numStartups || 1, theme: cfg.theme || 'dark',

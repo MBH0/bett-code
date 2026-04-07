@@ -81,8 +81,8 @@ export class OpenAICompatProvider implements ModelProvider {
   }> {
     const openaiParams = anthropicParamsToOpenAI(params)
     openaiParams.stream = true
-
-    try { require('fs').appendFileSync('/tmp/bett-debug.log', `[openai] tools=${openaiParams.tools?.length ?? 0} messages=${openaiParams.messages?.length ?? 0} model=${openaiParams.model}\n`) } catch {}
+    // Request usage stats in the stream (OpenAI sends them in the last chunk)
+    ;(openaiParams as Record<string, unknown>).stream_options = { include_usage: true }
 
     const response = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
@@ -122,6 +122,7 @@ export class OpenAICompatProvider implements ModelProvider {
     let hasStartedTextBlock = false
     const toolCallIndices = new Map<number, number>() // openai tool index -> our content block index
     const toolCallArgs = new Map<number, string>() // openai tool index -> accumulated args
+    let totalInputTokens = 0
     let totalOutputTokens = 0
     let finishReason = 'end_turn'
 
@@ -151,6 +152,12 @@ export class OpenAICompatProvider implements ModelProvider {
             chunk = JSON.parse(data)
           } catch {
             continue
+          }
+
+          // Capture usage BEFORE checking choices (last chunk has usage but empty choices)
+          if (chunk.usage && chunk.usage.prompt_tokens != null) {
+            totalInputTokens = chunk.usage.prompt_tokens
+            totalOutputTokens = chunk.usage.completion_tokens ?? totalOutputTokens
           }
 
           const choice = chunk.choices?.[0]
@@ -213,10 +220,7 @@ export class OpenAICompatProvider implements ModelProvider {
                   : 'end_turn'
           }
 
-          // Capture usage
-          if (chunk.usage) {
-            totalOutputTokens = chunk.usage.completion_tokens
-          }
+          // Usage already captured above (before choice check)
         }
       }
     } finally {
@@ -235,7 +239,7 @@ export class OpenAICompatProvider implements ModelProvider {
       currentContentIndex = Math.max(currentContentIndex, blockIndex + 1)
     }
 
-    yield messageDeltaEvent(finishReason, totalOutputTokens)
+    yield messageDeltaEvent(finishReason, totalOutputTokens, totalInputTokens)
     yield messageStopEvent()
   }
 

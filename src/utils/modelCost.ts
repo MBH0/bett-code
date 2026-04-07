@@ -143,8 +143,31 @@ export const COST_GEMINI_2_5_FLASH: ModelCosts = {
 }
 
 // External provider model costs lookup
+// OpenAI GPT-4.1 pricing: $2 input / $8 output per MTok
+export const COST_GPT41: ModelCosts = {
+  inputTokens: 2, outputTokens: 8,
+  promptCacheWriteTokens: 2, promptCacheReadTokens: 0.5, webSearchRequests: 0,
+}
+// OpenAI GPT-4.1 mini: $0.40 input / $1.60 output per MTok
+export const COST_GPT41_MINI: ModelCosts = {
+  inputTokens: 0.4, outputTokens: 1.6,
+  promptCacheWriteTokens: 0.4, promptCacheReadTokens: 0.1, webSearchRequests: 0,
+}
+// OpenAI GPT-4.1 nano: $0.10 input / $0.40 output per MTok
+export const COST_GPT41_NANO: ModelCosts = {
+  inputTokens: 0.1, outputTokens: 0.4,
+  promptCacheWriteTokens: 0.1, promptCacheReadTokens: 0.025, webSearchRequests: 0,
+}
+
 const EXTERNAL_MODEL_COSTS: Record<string, ModelCosts> = {
-  // OpenAI
+  // OpenAI GPT-4.1 family
+  'gpt-4.1': COST_GPT41,
+  'gpt-4.1-2025-04-14': COST_GPT41,
+  'gpt-4.1-mini': COST_GPT41_MINI,
+  'gpt-4.1-mini-2025-04-14': COST_GPT41_MINI,
+  'gpt-4.1-nano': COST_GPT41_NANO,
+  'gpt-4.1-nano-2025-04-14': COST_GPT41_NANO,
+  // OpenAI GPT-4o family
   'gpt-4o': COST_GPT4O,
   'gpt-4o-2024-08-06': COST_GPT4O,
   'gpt-4o-2024-11-20': COST_GPT4O,

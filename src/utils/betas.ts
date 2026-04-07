@@ -173,6 +173,7 @@ export function modelSupportsAutoMode(model: string): boolean {
     const config = getFeatureValue_CACHED_MAY_BE_STALE<{
       allowModels?: string[]
     }>('tengu_auto_mode_config', {})
+    if (!model) return false
     const rawLower = model.toLowerCase()
     if (
       config?.allowModels?.some(

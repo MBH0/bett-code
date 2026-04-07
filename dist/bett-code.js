@@ -82,6 +82,8 @@ if (process.argv.includes('--setting') || process.argv.includes('--settings')) {
   const cfgPath = join(process.env.CLAUDE_CONFIG_DIR, '.claude.json')
   let cfg = {}
   try { cfg = JSON.parse(readFileSync(cfgPath, 'utf8')) } catch {}
+  // Clean old settings before applying new ones
+  delete cfg.bettProviderBaseUrl
   Object.assign(cfg, {
     bettProvider: selected.name, bettProviderApiKey: apiKey.trim(), bettModel: model,
     hasCompletedOnboarding: true, numStartups: cfg.numStartups || 1, theme: cfg.theme || 'dark',

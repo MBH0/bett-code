@@ -215,6 +215,7 @@ export function getDefaultMainLoopModel(): ModelName {
  * module top-level (see MODEL_COSTS in modelCost.ts).
  */
 export function firstPartyNameToCanonical(name: ModelName): ModelShortName {
+  if (!name) return 'unknown' as ModelShortName
   name = name.toLowerCase()
   // Special cases for Claude 4+ models to differentiate versions
   // Order matters: check more specific versions first (4-5 before 4)
@@ -445,6 +446,7 @@ export function getPublicModelName(model: ModelName): string {
 export function parseUserSpecifiedModel(
   modelInput: ModelName | ModelAlias,
 ): ModelName {
+  if (!modelInput) return modelInput as ModelName
   const modelInputTrimmed = modelInput.trim()
   const normalizedModel = modelInputTrimmed.toLowerCase()
 
@@ -614,5 +616,6 @@ export function getMarketingNameForModel(modelId: string): string | undefined {
 }
 
 export function normalizeModelStringForAPI(model: string): string {
+  if (!model) return ''
   return model.replace(/\[(1|2)m\]/gi, '')
 }

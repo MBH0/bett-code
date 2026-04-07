@@ -127,7 +127,7 @@ export const CACHE_TTL_1HOUR_MS = 60 * 60 * 1000
 
 // Models to exclude from cache break detection (e.g., haiku has different caching behavior)
 function isExcludedModel(model: string): boolean {
-  return model.includes('haiku')
+  return !!model && model.includes('haiku')
 }
 
 /**

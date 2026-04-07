@@ -8,6 +8,7 @@ import { resolveOverriddenModel } from './modelStrings.js'
  * (or resolved name) contains the family identifier.
  */
 function modelBelongsToFamily(model: string, family: string): boolean {
+  if (!model) return false
   if (model.includes(family)) {
     return true
   }

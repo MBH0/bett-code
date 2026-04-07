@@ -991,7 +991,7 @@ function getFunctionResultClearingSection(model: string): string | null {
     return null
   }
   const config = getCachedMCConfigForFRC()
-  const isModelSupported = config.supportedModels?.some(pattern =>
+  const isModelSupported = !!model && config.supportedModels?.some(pattern =>
     model.includes(pattern),
   )
   if (

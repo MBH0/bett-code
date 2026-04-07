@@ -20,6 +20,7 @@ const validModelCache = new Map<string, boolean>()
 export async function validateModel(
   model: string,
 ): Promise<{ valid: boolean; error?: string }> {
+  if (!model) return { valid: false, error: 'No model specified' }
   const normalizedModel = model.trim()
 
   // Empty model is invalid
@@ -145,6 +146,7 @@ function get3PFallbackSuggestion(model: string): string | undefined {
   if (getAPIProvider() === 'firstParty') {
     return undefined
   }
+  if (!model) return undefined
   const lowerModel = model.toLowerCase()
   if (lowerModel.includes('opus-4-6') || lowerModel.includes('opus_4_6')) {
     return getModelStrings().opus41

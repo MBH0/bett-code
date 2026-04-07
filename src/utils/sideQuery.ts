@@ -121,6 +121,55 @@ export async function sideQuery(opts: SideQueryOptions): Promise<BetaMessage> {
     stop_sequences,
   } = opts
 
+  // bett-code: route sideQuery to external provider
+  if (process.env.BETT_CODE_PROVIDER && process.env.BETT_CODE_PROVIDER !== 'anthropic') {
+    const baseUrl = process.env.BETT_CODE_PROVIDER_BASE_URL || 'https://api.openai.com/v1'
+    const apiKey = process.env.BETT_CODE_PROVIDER_API_KEY || ''
+    const actualModel = process.env.ANTHROPIC_MODEL || model || 'gpt-4o'
+    // Build messages for OpenAI format
+    const systemText = Array.isArray(system)
+      ? system.map(b => typeof b === 'string' ? b : (b as { text?: string }).text ?? '').join('\n')
+      : (system ?? '')
+    const openaiMessages: Array<{ role: string; content: string }> = []
+    if (systemText) openaiMessages.push({ role: 'system', content: systemText })
+    for (const msg of messages) {
+      const content = typeof msg.content === 'string'
+        ? msg.content
+        : Array.isArray(msg.content)
+          ? msg.content.map((b: { type?: string; text?: string }) => b.type === 'text' ? (b.text ?? '') : '').join('')
+          : ''
+      openaiMessages.push({ role: msg.role, content })
+    }
+    try {
+      const response = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify({ model: actualModel, messages: openaiMessages, max_tokens, stream: false }),
+        signal,
+      })
+      const data: { choices?: Array<{ message?: { content?: string } }> } = await response.json() as { choices?: Array<{ message?: { content?: string } }> }
+      const text = data?.choices?.[0]?.message?.content ?? ''
+      return {
+        id: 'msg_' + Date.now(),
+        type: 'message',
+        role: 'assistant',
+        model: actualModel,
+        content: [{ type: 'text', text }],
+        stop_reason: 'end_turn',
+        stop_sequence: null,
+        usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
+      } as unknown as BetaMessage
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e)
+      return {
+        id: 'msg_err', type: 'message', role: 'assistant', model: actualModel,
+        content: [{ type: 'text', text: 'sideQuery error: ' + msg }],
+        stop_reason: 'end_turn', stop_sequence: null,
+        usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
+      } as unknown as BetaMessage
+    }
+  }
+
   const client = await getAnthropicClient({
     maxRetries,
     model,
