@@ -48,3 +48,24 @@ gofmt -l .
 go vet ./...
 go build ./...
 ```
+
+## Testing
+
+Unit tests run without any external dependencies:
+
+```bash
+go test ./...
+```
+
+End-to-end tests drive the real Bubbletea TUI (same key path a user takes)
+and assert that OpenCode gets configured on disk, that Engram's MCP server
+comes up and speaks the protocol OpenCode expects, and that a real `opencode`
+binary accepts the generated config:
+
+```bash
+go test ./e2e/ -v
+```
+
+The e2e tests skip automatically when `engram`/`opencode` are not on PATH.
+They use throwaway `XDG_CONFIG_HOME` and `HOME` dirs, so your real config and
+`~/.engram` are never touched. Run with `-race` to check for data races.

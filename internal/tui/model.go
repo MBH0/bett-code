@@ -78,6 +78,15 @@ func New() Model {
 	}
 }
 
+// Screen returns the current screen. Exported for tests.
+func (m Model) Screen() Screen { return m.screen }
+
+// Result returns the steps from the last finished operation. Exported for tests.
+func (m Model) Result() []harness.Step { return m.result }
+
+// ResultErr returns the error from the last finished operation, if any.
+func (m Model) ResultErr() error { return m.resultErr }
+
 // Init starts the async status detection and the spinner.
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(detectStatus, m.spinner.Tick)
@@ -171,7 +180,7 @@ func (m Model) updateKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case ScreenWorking:
 		// Ignore keys while working so the async op completes untouched.
 
-	case ScreenResult:
+	case ScreenResult, ScreenComplete:
 		switch msg.String() {
 		case "enter", "esc", "q":
 			m.screen = ScreenWelcome
