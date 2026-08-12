@@ -105,8 +105,8 @@ func TestWireEngramWritesPluginAndMCP(t *testing.T) {
 	}
 
 	oc := filepath.Join(dir, "opencode")
-	if !opencode.HasMCP("engram") {
-		t.Error("engram MCP server not registered")
+	if !opencode.HasMCP(ServerName) {
+		t.Errorf("%s MCP server not registered", ServerName)
 	}
 	plugin := filepath.Join(oc, "plugins", "engram.ts")
 	if _, err := os.Stat(plugin); err != nil {

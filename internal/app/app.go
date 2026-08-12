@@ -16,15 +16,15 @@ import (
 const Version = "0.1.0"
 
 // usage is printed for --help.
-const usage = `bett-ai-harness — wire Engram persistent memory into OpenCode
+const usage = `bett-ai-harness — wire bett-ai persistent memory into OpenCode
 
 Usage:
   bett-ai-harness            launch the interactive harness
   bett-ai-harness --version  print the version and exit
   bett-ai-harness --help     show this help and exit
 
-The interactive TUI detects your OpenCode and Engram installs, then offers:
-  1. Wire Engram (plugin + MCP + server)
+The interactive TUI detects your OpenCode and bett-ai installs, then offers:
+  1. Wire bett-ai (plugin + MCP + server)
   2. Install commands & skills
   3. Re-sync (both)
 `

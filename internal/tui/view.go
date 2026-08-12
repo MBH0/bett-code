@@ -3,6 +3,8 @@ package tui
 import (
 	"fmt"
 	"strings"
+
+	"bett-ai-harness/internal/harness"
 )
 
 // viewWelcome renders the status panel plus the action menu. The menu can be
@@ -12,7 +14,7 @@ func (m Model) viewWelcome() string {
 
 	b.WriteString(titleStyle.Render("bett-ai-harness"))
 	b.WriteString("\n")
-	b.WriteString(mutedStyle.Render("Wire Engram persistent memory into OpenCode."))
+	b.WriteString(mutedStyle.Render("Wire bett-ai persistent memory into OpenCode."))
 	b.WriteString("\n\n")
 
 	b.WriteString(m.viewStatus())
@@ -48,13 +50,13 @@ func (m Model) viewStatus() string {
 		inner.WriteString("\n")
 		inner.WriteString(statusLine("binary", s.OpenCode.BinaryFound, s.OpenCode.BinaryPath))
 		inner.WriteString(statusLine("config", s.OpenCode.ConfigDir != "", s.OpenCode.ConfigDir))
-		inner.WriteString(statusLine("engram MCP", s.OpenCode.HasEngramMCP, mcpState(s.OpenCode.HasEngramMCP)))
-		inner.WriteString(statusLine("engram plugin", s.OpenCode.HasEngramPlugin, pluginState(s.OpenCode.HasEngramPlugin)))
+		inner.WriteString(statusLine(harness.ServerName+" MCP", s.OpenCode.HasEngramMCP, mcpState(s.OpenCode.HasEngramMCP)))
+		inner.WriteString(statusLine(harness.ServerName+" plugin", s.OpenCode.HasEngramPlugin, pluginState(s.OpenCode.HasEngramPlugin)))
 		inner.WriteString(statusLine("commands", len(s.OpenCode.Commands) > 0, strings.Join(s.OpenCode.Commands, ", ")))
 		inner.WriteString(statusLine("skills", len(s.OpenCode.Skills) > 0, strings.Join(s.OpenCode.Skills, ", ")))
 
 		inner.WriteString("\n")
-		inner.WriteString(headerStyle.Render("Engram"))
+		inner.WriteString(headerStyle.Render("bett-ai"))
 		inner.WriteString("\n")
 		inner.WriteString(statusLine("binary", s.Engram.BinaryFound, s.Engram.BinaryPath))
 		inner.WriteString(statusLine("server", s.Engram.ServerUp, fmt.Sprintf("127.0.0.1:%d", s.Engram.Port)))

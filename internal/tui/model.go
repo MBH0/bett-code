@@ -47,7 +47,7 @@ type menuItem struct {
 }
 
 var menuItems = []string{
-	"Wire Engram (plugin + MCP + server)",
+	"Wire bett-ai (plugin + MCP + server)",
 	"Install Commands & Skills",
 	"Re-sync (both)",
 }
@@ -195,7 +195,7 @@ func (m Model) startOp(idx int) (tea.Model, tea.Cmd) {
 	m.screen = ScreenWorking
 	switch idx {
 	case 0:
-		m.workingLabel = "Wiring Engram into OpenCode…"
+		m.workingLabel = "Wiring bett-ai into OpenCode…"
 		return m, tea.Batch(m.spinner.Tick, runWireEngram)
 	case 1:
 		m.workingLabel = "Installing commands & skills…"

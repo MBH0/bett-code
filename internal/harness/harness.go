@@ -22,6 +22,9 @@ type Step struct {
 	Text string
 }
 
+// ServerName is the MCP server name the harness registers in OpenCode.
+const ServerName = "bett-ai"
+
 // DetectStatus assembles the current system state for the welcome screen.
 func DetectStatus() model.Status {
 	ocFound, ocBin := opencode.Detect()
@@ -32,7 +35,7 @@ func DetectStatus() model.Status {
 			BinaryFound:     ocFound,
 			BinaryPath:      ocBin,
 			ConfigDir:       opencode.ConfigDir(),
-			HasEngramMCP:    opencode.HasMCP("engram"),
+			HasEngramMCP:    opencode.HasMCP(ServerName),
 			HasEngramPlugin: engram.PluginInstalled(opencode.PluginDir()),
 			Commands:        opencode.ExistingCommands(),
 			Skills:          opencode.ExistingSkills(),
@@ -71,14 +74,14 @@ func WireEngram() []Step {
 		}
 	}
 
-	changed, err := opencode.RegisterMCP("engram", engram.ResolveCommand(), []string{"mcp", "--tools=agent"})
+	changed, err := opencode.RegisterMCP(ServerName, engram.ResolveCommand(), []string{"mcp", "--tools=agent"})
 	switch {
 	case err != nil:
 		steps = append(steps, Step{OK: false, Text: fmt.Sprintf("Register MCP in opencode.json: %v", err)})
 	case changed:
-		steps = append(steps, Step{OK: true, Text: "MCP server 'engram' registered in opencode.json"})
+		steps = append(steps, Step{OK: true, Text: fmt.Sprintf("MCP server '%s' registered in opencode.json", ServerName)})
 	default:
-		steps = append(steps, Step{OK: true, Text: "MCP server 'engram' already registered"})
+		steps = append(steps, Step{OK: true, Text: fmt.Sprintf("MCP server '%s' already registered", ServerName)})
 	}
 
 	if !found {

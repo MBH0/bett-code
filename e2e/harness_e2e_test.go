@@ -21,6 +21,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"bett-ai-harness/internal/engram"
+	"bett-ai-harness/internal/harness"
 	"bett-ai-harness/internal/opencode"
 	"bett-ai-harness/internal/tui"
 )
@@ -171,7 +172,7 @@ func TestTUWiresEngramIntoOpenCode(t *testing.T) {
 	press(t, in, "3")
 
 	// Wait for the real side effects to land on disk.
-	waitFor(t, func() bool { return opencode.HasMCP("engram") })
+	waitFor(t, func() bool { return opencode.HasMCP(harness.ServerName) })
 	waitFor(t, func() bool {
 		_, err := os.Stat(filepath.Join(oc, "plugins", "engram.ts"))
 		return err == nil
@@ -252,7 +253,7 @@ func TestOpenCodeReadsGeneratedConfig(t *testing.T) {
 
 	in, done, _ := runTUI(t)
 	press(t, in, "1")
-	waitFor(t, func() bool { return opencode.HasMCP("engram") })
+	waitFor(t, func() bool { return opencode.HasMCP(harness.ServerName) })
 	quit(t, in, done)
 
 	cmd := exec.Command("opencode", "mcp", "list")
@@ -261,8 +262,8 @@ func TestOpenCodeReadsGeneratedConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("opencode mcp list failed: %v\n%s", err, out)
 	}
-	if !bytes.Contains(out, []byte("engram")) {
-		t.Errorf("opencode mcp list did not show engram server:\n%s", out)
+	if !bytes.Contains(out, []byte(harness.ServerName)) {
+		t.Errorf("opencode mcp list did not show %s server:\n%s", harness.ServerName, out)
 	}
 }
 
