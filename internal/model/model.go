@@ -97,26 +97,45 @@ type EngramStatus struct {
 
 // SDDPhase enumerates the phases of the SDD orchestrator. Each phase can be
 // assigned its own model within an SDD profile, mirroring gentle-ai's
-// per-phase model routing (orchestrator / explore / design / apply / verify).
+// per-phase model routing.
+//
+// Core SDD phases (in execution order):
+//   orchestrator, explore, propose, spec, design, tasks, apply, verify, archive
+//
+// Judgment Day (jd) agents — independent reviewers and the fixer:
+//   judge-a, judge-b      — adversarial reviewers (gentle-ai uses 2 for diversity)
+//   fix-agent            — runs after verification finds issues
+//
+// Cross-cutting helpers:
+//   onboard              — first-time scan of a brand-new project
+//   think                 — extended reasoning pass (used by propose/spec/design)
 type SDDPhase string
 
 const (
-	PhaseOrchestrator SDDPhase = "orchestrator" // main conductor
+	// Core SDD lifecycle.
+	PhaseOrchestrator SDDPhase = "orchestrator" // main conductor — plans, routes, adjudicates
+	PhaseOnboard      SDDPhase = "onboard"      // brand-new project scan + framework detection
 	PhaseExplore      SDDPhase = "explore"      // investigate the codebase
-	PhasePropose      SDDPhase = "propose"      // draft a proposal
-	PhaseSpec         SDDPhase = "spec"         // requirements + scenarios
+	PhaseThink        SDDPhase = "think"        // extended reasoning (optionally inlined by the conductor)
+	PhasePropose      SDDPhase = "propose"      // draft a proposal (intent · scope · approach)
+	PhaseSpec         SDDPhase = "spec"         // requirements + acceptance scenarios
 	PhaseDesign       SDDPhase = "design"       // architecture decisions
 	PhaseTasks        SDDPhase = "tasks"        // ordered deliverable checklist
-	PhaseApply        SDDPhase = "apply"        // implementation
-	PhaseVerify       SDDPhase = "verify"       // independent verification
-	PhaseArchive      SDDPhase = "archive"      // close the cycle
+	PhaseApply        SDDPhase = "apply"        // implementation against spec/design/tasks
+	PhaseVerify       SDDPhase = "verify"       // independent verification (RED/GREEN evidence)
+	PhaseJudgeA       SDDPhase = "judge-a"      // Judgment Day reviewer #1 (adversarial)
+	PhaseJudgeB       SDDPhase = "judge-b"      // Judgment Day reviewer #2 (independent of judge-a)
+	PhaseFixAgent     SDDPhase = "fix-agent"    // bounded correction after verification/judges fail
+	PhaseArchive      SDDPhase = "archive"      // close the cycle, merge delta-specs
 )
 
 // AllPhases lists every SDD phase in execution order. Useful for the model
 // picker and for building default profile values.
 var AllPhases = []SDDPhase{
-	PhaseOrchestrator, PhaseExplore, PhasePropose, PhaseSpec,
-	PhaseDesign, PhaseTasks, PhaseApply, PhaseVerify, PhaseArchive,
+	PhaseOrchestrator, PhaseOnboard, PhaseExplore, PhaseThink,
+	PhasePropose, PhaseSpec, PhaseDesign, PhaseTasks,
+	PhaseApply, PhaseVerify, PhaseJudgeA, PhaseJudgeB,
+	PhaseFixAgent, PhaseArchive,
 }
 
 // SDDProfile is one named model profile used by an SDD-capable agent. Each

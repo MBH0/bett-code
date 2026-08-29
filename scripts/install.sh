@@ -27,6 +27,7 @@
 #   curl -fsSL .../install.sh | bash -s -- --channel beta
 #   curl -fsSL .../install.sh | bash -s -- --sdd-profile cheap
 #   curl -fsSL .../install.sh | bash -s -- --model-apply openrouter/qwen/qwen3-30b-a3b:free
+#   curl -fsSL .../install.sh | bash -s -- --model-judge-a anthropic/claude-opus-4-20250514
 #
 # Environment overrides:
 #   BETT_VERSION              — pinned version (e.g. v1.2.3); defaults to @latest
@@ -34,7 +35,11 @@
 #   BETT_GO_VERSION           — Go version to install (default: 1.23.4)
 #   BETT_SDD_PROFILE          — profile to activate: default | cheap | premium
 #   BETT_AGENT                — agent to target: opencode | claude-code (default: opencode)
-#   BETT_MODEL_<PHASE>        — per-phase override (e.g. BETT_MODEL_APPLY=...)
+#   BETT_MODEL_<PHASE>        — per-phase override (e.g. BETT_MODEL_APPLY=...).
+#                                PHASE ∈ {orchestrator, onboard, explore, think,
+#                                         propose, spec, design, tasks, apply,
+#                                         verify, judge-a, judge-b, fix-agent, archive}.
+#                                Hyphens become underscores: judge-a → BETT_MODEL_JUDGE_A.
 #   BETT_SKIP_ENGRAM          — set to "1" to skip Engram install
 #   BETT_SKIP_PROFILES        — set to "1" to skip SDD profile seeding
 #   GOBIN/GOPATH              — destination for `go install` (default: ~/.local/go)
@@ -76,13 +81,18 @@ while [[ $# -gt 0 ]]; do
     --sdd-profile)       SDD_PROFILE="$2"; shift 2 ;;
     --agent)             AGENT="$2"; shift 2 ;;
     --model-orchestrator) export BETT_MODEL_ORCHESTRATOR="$2"; shift 2 ;;
+    --model-onboard)      export BETT_MODEL_ONBOARD="$2"; shift 2 ;;
     --model-explore)      export BETT_MODEL_EXPLORE="$2"; shift 2 ;;
+    --model-think)        export BETT_MODEL_THINK="$2"; shift 2 ;;
     --model-propose)      export BETT_MODEL_PROPOSE="$2"; shift 2 ;;
     --model-spec)         export BETT_MODEL_SPEC="$2"; shift 2 ;;
     --model-design)       export BETT_MODEL_DESIGN="$2"; shift 2 ;;
     --model-tasks)        export BETT_MODEL_TASKS="$2"; shift 2 ;;
     --model-apply)        export BETT_MODEL_APPLY="$2"; shift 2 ;;
     --model-verify)       export BETT_MODEL_VERIFY="$2"; shift 2 ;;
+    --model-judge-a)      export BETT_MODEL_JUDGE_A="$2"; shift 2 ;;
+    --model-judge-b)      export BETT_MODEL_JUDGE_B="$2"; shift 2 ;;
+    --model-fix-agent)    export BETT_MODEL_FIX_AGENT="$2"; shift 2 ;;
     --model-archive)      export BETT_MODEL_ARCHIVE="$2"; shift 2 ;;
     -h|--help)
       cat <<EOF
@@ -94,13 +104,18 @@ Options:
   --agent AGENT                Target agent: opencode | claude-code. Default: opencode.
   --sdd-profile NAME           Activate profile: default | cheap | premium.
   --model-orchestrator MODEL   Per-phase model override (--model-<phase>=<model>).
-  --model-explore MODEL        Same for each SDD phase: orchestrator, explore,
-  --model-propose MODEL        propose, spec, design, tasks, apply, verify,
-  --model-spec MODEL           archive.
+  --model-onboard MODEL        Phases: orchestrator, onboard, explore, think,
+  --model-explore MODEL        propose, spec, design, tasks, apply, verify,
+  --model-think MODEL          judge-a, judge-b, fix-agent, archive.
+  --model-propose MODEL
+  --model-spec MODEL
   --model-design MODEL
   --model-tasks MODEL
   --model-apply MODEL
   --model-verify MODEL
+  --model-judge-a MODEL
+  --model-judge-b MODEL
+  --model-fix-agent MODEL
   --model-archive MODEL
   -h, --help                   Show this help.
 
@@ -460,10 +475,14 @@ seed_sdd_profiles() {
 
   # Apply per-phase overrides from --model-<phase>=<model> or BETT_MODEL_<PHASE>.
   # Bash doesn't support ${VAR_${OTHER}} indirect expansion in older syntax,
-  # so we expand by name with `env` then `printenv`.
-  local phase model
-  for phase in orchestrator explore propose spec design tasks apply verify archive; do
-    model="$(env | awk -F= -v phase="$phase" 'BEGIN{p=toupper(phase)} $1=="BETT_MODEL_"p {print substr($0, length($1)+2); exit}')"
+  # so we expand by name with `env` then `awk`.
+  # Note: phase names with hyphens (judge-a, judge-b, fix-agent) become
+  # BETT_MODEL_JUDGE_A / _JUDGE_B / _FIX_AGENT respectively (hyphens replaced
+  # with underscores, then uppercased).
+  local phase model phase_var
+  for phase in orchestrator onboard explore think propose spec design tasks apply verify judge-a judge-b fix-agent archive; do
+    phase_var="BETT_MODEL_$(printf '%s' "$phase" | tr '[:lower:]-' '[:upper:]_')"
+    model="$(env | awk -F= -v v="$phase_var" '$1==v {sub(/^[^=]+=/, ""); print; exit}')"
     if [[ -z "$model" ]]; then continue; fi
     "$BINARY" set-model "$AGENT" "$SDD_PROFILE" "$phase" "$model" >&2
     ok "Set ${AGENT}/${SDD_PROFILE}/${phase} = ${model}"

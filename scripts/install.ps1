@@ -371,9 +371,10 @@ function Seed-SDDProfiles {
     }
 
     # Per-phase overrides from $env:BETT_MODEL_<PHASE>
-    foreach ($phase in @("orchestrator","explore","propose","spec","design","tasks","apply","verify","archive")) {
-        $var = "BETT_MODEL_" + $phase.ToUpper()
-        $modelVal = (Get-Item env:$var -ErrorAction SilentlyContinue).Value
+    foreach ($phase in @("orchestrator","onboard","explore","think","propose","spec","design","tasks","apply","verify","judge-a","judge-b","fix-agent","archive")) {
+        # Hyphens in phase names become underscores in the env var name.
+        $envName = "BETT_MODEL_" + ($phase -replace '-', '_').ToUpper()
+        $modelVal = (Get-Item "env:$envName" -ErrorAction SilentlyContinue).Value
         if ($modelVal) {
             & $harnessPath set-model $Agent $SDDProfile $phase $modelVal 2>&1 | Out-Null
             Write-Ok "Set $Agent/$SDDProfile/$phase = $modelVal"

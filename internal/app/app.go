@@ -41,8 +41,9 @@ Non-interactive subcommands (used by the install scripts):
   bett-ai-harness activate-profile <agent> <profile>
                                           enable <profile>, disable the others
 
-Phase names: orchestrator, explore, propose, spec, design, tasks,
-             apply, verify, archive.
+Phase names: orchestrator, onboard, explore, think, propose, spec,
+             design, tasks, apply, verify, judge-a, judge-b, fix-agent,
+             archive.
 
 The interactive TUI detects your OpenCode and bett-ai installs, then offers:
   1. Wire bett-ai (plugin + MCP + server)
@@ -118,14 +119,33 @@ func runSeedProfiles(args []string, w io.Writer, errW io.Writer) error {
 		fmt.Fprintln(errW, err)
 		return err
 	}
-	// Triggering loadSDDProfilesFor with no existing file will return defaults
-	// and then save them — but that happens inside the load path. The simplest
-	// explicit seed is: read whatever is there (defaults if absent), then
-	// save. That ensures the file lands on disk and the user can edit it.
-	profiles := harness.LoadSDDProfilesFor(agent)
-	if len(profiles) == 0 {
-		profiles = harness.DefaultSDDProfiles()
+	// Always write the latest defaults to disk so a new bett-ai-harness
+	// version that adds phases (e.g. judge-a, fix-agent, think) picks them
+	// up automatically. The activation state from the existing file is
+	// preserved when we can match it by name.
+	existing := harness.LoadSDDProfilesFor(agent)
+	enabled := map[string]bool{}
+	for _, p := range existing {
+		enabled[p.Name] = p.Enabled
 	}
+
+	profiles := harness.DefaultSDDProfiles()
+	// Restore activation state if the profile names match.
+	for i := range profiles {
+		if v, ok := enabled[profiles[i].Name]; ok {
+			profiles[i].Enabled = v
+		}
+	}
+
+	// Honor a user-passed activation flag so the installer can do
+	// `seed-profiles opencode && activate-profile opencode cheap` in one go.
+	if len(args) >= 2 {
+		if err := harness.ActivateProfile(agent, args[1]); err != nil {
+			fmt.Fprintf(errW, "warn: could not activate %q: %v\n", args[1], err)
+		}
+		profiles = harness.LoadSDDProfilesFor(agent)
+	}
+
 	if err := harness.SaveSDDProfilesFor(agent, profiles); err != nil {
 		fmt.Fprintln(errW, err)
 		return err

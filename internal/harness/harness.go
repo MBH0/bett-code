@@ -335,58 +335,89 @@ func DefaultSDDProfiles() []model.SDDProfile {
 
 // defaultSDDProfiles returns the gentle-orchestrator default profile set.
 // Each profile assigns one model per SDD phase — mirror the Carriles split
-// from gentle-ai: sdd-strong phases (orchestrator/explore/propose/spec/
-// design/verify) reason over context, sdd-mid phases (apply) write code in
-// an agentic loop, sdd-cheap phases (tasks/archive) do structured
-// transcription. Phase-by-phase model IDs match gentle-ai's defaults.
+// from gentle-ai:
+//
+//   sdd-strong phases (orchestrator, onboard, explore, think, propose,
+//                     spec, design, verify, judge-a, judge-b)
+//     reason over context → use sonnet by default, opus in premium
+//   sdd-mid phases (apply, fix-agent)
+//     write code in an agentic loop → sonnet default
+//   sdd-cheap phases (tasks, archive)
+//     structured transcription → haiku default
+//
+// Each profile also varies the Judgment Day agents independently so the two
+// judges can use different models (diversity > agreement).
 func defaultSDDProfiles() []model.SDDProfile {
 	const sonnet = "anthropic/claude-sonnet-4-20250514"
 	const haiku = "anthropic/claude-haiku-3-5-20241022"
 	const opus = "anthropic/claude-opus-4-20250514"
 	const qwen = "openrouter/qwen/qwen3-30b-a3b:free"
 
+	// default — production-quality across the board.
 	defaultProfile := model.SDDProfile{
-		Name: "default",
+		Name:    "default",
 		Enabled: true,
 		Models: map[model.SDDPhase]string{
 			model.PhaseOrchestrator: sonnet,
+			model.PhaseOnboard:      sonnet,
 			model.PhaseExplore:      sonnet,
+			model.PhaseThink:        sonnet,
 			model.PhasePropose:      sonnet,
 			model.PhaseSpec:         sonnet,
 			model.PhaseDesign:       sonnet,
 			model.PhaseTasks:        haiku,
 			model.PhaseApply:        sonnet,
 			model.PhaseVerify:       sonnet,
+			model.PhaseJudgeA:       sonnet,
+			model.PhaseJudgeB:       sonnet, // diverse judges — different prompt, same model
+			model.PhaseFixAgent:     sonnet,
 			model.PhaseArchive:      haiku,
 		},
 	}
+
+	// cheap — small/cheap models everywhere. judge-a gets sonnet so the
+	// adversarial reviewer still has reasoning depth even when the rest of
+	// the pipeline runs on qwen; judge-b stays on qwen for cost.
 	cheapProfile := model.SDDProfile{
 		Name:    "cheap",
 		Enabled: false,
 		Models: map[model.SDDPhase]string{
 			model.PhaseOrchestrator: haiku,
+			model.PhaseOnboard:      haiku,
 			model.PhaseExplore:      haiku,
+			model.PhaseThink:        qwen,
 			model.PhasePropose:      qwen,
 			model.PhaseSpec:         qwen,
 			model.PhaseDesign:       qwen,
 			model.PhaseTasks:        qwen,
 			model.PhaseApply:        qwen,
 			model.PhaseVerify:       qwen,
+			model.PhaseJudgeA:       sonnet,
+			model.PhaseJudgeB:       qwen,
+			model.PhaseFixAgent:     qwen,
 			model.PhaseArchive:      qwen,
 		},
 	}
+
+	// premium — opus for everything that reasons; sonnet where opus is
+	// overkill (structured transcription, agentic code writes).
 	premiumProfile := model.SDDProfile{
 		Name:    "premium",
 		Enabled: false,
 		Models: map[model.SDDPhase]string{
 			model.PhaseOrchestrator: opus,
+			model.PhaseOnboard:      opus,
 			model.PhaseExplore:      opus,
+			model.PhaseThink:        opus,
 			model.PhasePropose:      opus,
 			model.PhaseSpec:         sonnet,
 			model.PhaseDesign:       opus,
 			model.PhaseTasks:        sonnet,
 			model.PhaseApply:        sonnet,
 			model.PhaseVerify:       opus,
+			model.PhaseJudgeA:       opus,
+			model.PhaseJudgeB:       opus,
+			model.PhaseFixAgent:     opus,
 			model.PhaseArchive:      haiku,
 		},
 	}
