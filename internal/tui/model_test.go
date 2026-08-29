@@ -24,7 +24,7 @@ func upd(t *testing.T, m Model, msg tea.Msg) Model {
 
 func TestMenuNavigation(t *testing.T) {
 	m := New()
-	// Move down and check the cursor wraps stays in range.
+	// Move down twice and check the cursor advances.
 	m = upd(t, m, keyMsg("down"))
 	if m.cursor != 1 {
 		t.Errorf("cursor after down = %d, want 1", m.cursor)
@@ -33,30 +33,36 @@ func TestMenuNavigation(t *testing.T) {
 	if m.cursor != 2 {
 		t.Errorf("cursor after j = %d, want 2", m.cursor)
 	}
-	m = upd(t, m, keyMsg("down"))
-	if m.cursor != 2 {
-		t.Errorf("cursor should clamp at last item, got %d", m.cursor)
+	// Push past the end; cursor must clamp at last item.
+	for i := 0; i < len(menuItems)+2; i++ {
+		m = upd(t, m, keyMsg("down"))
+	}
+	last := len(menuItems) - 1
+	if m.cursor != last {
+		t.Errorf("cursor should clamp at %d, got %d", last, m.cursor)
 	}
 	m = upd(t, m, keyMsg("up"))
-	if m.cursor != 1 {
-		t.Errorf("cursor after up = %d, want 1", m.cursor)
+	if m.cursor != last-1 {
+		t.Errorf("cursor after up = %d, want %d", m.cursor, last-1)
 	}
 }
 
-func TestNumberKeysSelectOperation(t *testing.T) {
+func TestEnterSelectsOperation(t *testing.T) {
 	m := New()
-	m = upd(t, m, keyMsg("2"))
+	// Move to "Install Commands & Skills" (idx 1) then press enter.
+	m = upd(t, m, keyMsg("down"))
+	m = upd(t, m, keyMsg("enter"))
 	if m.screen != ScreenWorking {
 		t.Fatalf("screen = %v, want ScreenWorking", m.screen)
 	}
-	if !strings.Contains(m.workingLabel, "commands & skills") {
-		t.Errorf("workingLabel = %q", m.workingLabel)
+	if !strings.Contains(m.workingLabel, "commands") {
+		t.Errorf("workingLabel = %q (expected to mention commands)", m.workingLabel)
 	}
 }
 
 func TestOpResultRoutesToResultScreen(t *testing.T) {
 	m := New()
-	m = upd(t, m, keyMsg("1"))
+	m = upd(t, m, keyMsg("enter"))
 	m = upd(t, m, opResultMsg{
 		steps: []harness.Step{{OK: true, Text: "ok"}, {OK: false, Text: "fail"}},
 	})
@@ -70,7 +76,10 @@ func TestOpResultRoutesToResultScreen(t *testing.T) {
 
 func TestResyncRoutesToCompleteScreen(t *testing.T) {
 	m := New()
-	m = upd(t, m, keyMsg("3"))
+	// navigate to "Re-sync (both)" (idx 2) then press enter
+	m = upd(t, m, keyMsg("down"))
+	m = upd(t, m, keyMsg("down"))
+	m = upd(t, m, keyMsg("enter"))
 	m = upd(t, m, opResultMsg{steps: []harness.Step{{OK: true, Text: "ok"}}, resync: true})
 	if m.screen != ScreenComplete {
 		t.Fatalf("screen = %v, want ScreenComplete", m.screen)
@@ -96,9 +105,9 @@ func TestStatusLoadedUpdatesModel(t *testing.T) {
 func TestViewRendersMenu(t *testing.T) {
 	m := New()
 	view := m.View()
-	for _, label := range menuItems {
-		if !strings.Contains(view, label) {
-			t.Errorf("view missing menu item %q", label)
+	for _, item := range menuItems {
+		if !strings.Contains(view, item.label) {
+			t.Errorf("view missing menu item %q", item.label)
 		}
 	}
 }

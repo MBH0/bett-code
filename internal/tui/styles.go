@@ -66,4 +66,12 @@ var (
 
 	spinnerStyle = lipgloss.NewStyle().
 			Foreground(colorRose)
+
+	activeStyle = lipgloss.NewStyle().
+			Foreground(colorRose).
+			Bold(true)
+
+	subtleStyle = lipgloss.NewStyle().
+			Foreground(colorMuted).
+			Italic(true)
 )

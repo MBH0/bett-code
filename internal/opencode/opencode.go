@@ -17,9 +17,20 @@ import (
 // LookPath is a package-level seam so tests can stub binary detection.
 var LookPath = exec.LookPath
 
+// OpenCodeConfigDir is the cross-package alias used by the model package to
+// compose multi-agent paths. Identical to ConfigDir; kept separate so callers
+// do not need to import internal/opencode just for path composition.
+func OpenCodeConfigDir() string { return opencodeConfigDir() }
+
 // ConfigDir returns OpenCode's global config directory. OpenCode always uses
 // ~/.config/opencode (or $XDG_CONFIG_HOME/opencode) on every platform.
 func ConfigDir() string {
+	return opencodeConfigDir()
+}
+
+// opencodeConfigDir is the unexported worker; exported as ConfigDir so that
+// the model package can compose multi-agent paths without import cycles.
+func opencodeConfigDir() string {
 	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
 		return filepath.Join(xdg, "opencode")
 	}

@@ -161,15 +161,18 @@ func waitFor(t *testing.T, cond func() bool) {
 }
 
 // TestTUWiresEngramIntoOpenCode is the core e2e: it drives the TUI's
-// "Re-sync" action (key "3", which runs both Wire Engram and Install
-// Commands & Skills) against a real engram binary and asserts the OpenCode
-// config dir now contains the plugin, MCP registration, and assets.
+// "Re-sync" action (third menu item, key sequence down/down/enter) which runs
+// both Wire Engram and Install Commands & Skills against a real engram binary
+// and asserts the OpenCode config dir now contains the plugin, MCP registration,
+// and assets.
 func TestTUWiresEngramIntoOpenCode(t *testing.T) {
 	requireEngram(t)
 	oc := withTempConfig(t)
 
 	in, done, _ := runTUI(t)
-	press(t, in, "3")
+	press(t, in, "down")
+	press(t, in, "down")
+	press(t, in, "enter")
 
 	// Wait for the real side effects to land on disk.
 	waitFor(t, func() bool { return opencode.HasMCP(harness.ServerName) })
@@ -225,7 +228,8 @@ func TestTUIInstallsAssets(t *testing.T) {
 	oc := withTempConfig(t)
 
 	in, done, _ := runTUI(t)
-	press(t, in, "2")
+	press(t, in, "down")
+	press(t, in, "enter")
 
 	waitFor(t, func() bool {
 		_, err := os.Stat(filepath.Join(oc, "commands", "doctor.md"))
@@ -252,7 +256,7 @@ func TestOpenCodeReadsGeneratedConfig(t *testing.T) {
 	oc := withTempConfig(t)
 
 	in, done, _ := runTUI(t)
-	press(t, in, "1")
+	press(t, in, "enter") // first menu item is Wire bett-ai
 	waitFor(t, func() bool { return opencode.HasMCP(harness.ServerName) })
 	quit(t, in, done)
 
