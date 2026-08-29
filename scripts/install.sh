@@ -141,7 +141,24 @@ install_from_go() {
   local gover; gover="$(go version | awk '{print $3}')"
   log "Using Go ${gover}"
   log "Running: GOBIN=${INSTALL_DIR} go install ${MODULE_PATH}${ver}"
-  GOBIN="${INSTALL_DIR}" go install "${MODULE_PATH}${ver}"
+  if ! GOBIN="${INSTALL_DIR}" go install "${MODULE_PATH}${ver}" 2>&1 | tee /tmp/bett-go-install.log; then
+    # If @latest failed and the user didn't pin a specific version, fall back
+    # to @main. The Go proxy cache for @latest can be minutes behind, but @main
+    # is fetched directly from git HEAD so it's always current.
+    if [[ "$ver" == "@latest" ]]; then
+      warn "go install @latest failed (proxy cache may be stale); trying @main"
+      log "Running: GOBIN=${INSTALL_DIR} go install ${MODULE_PATH}@main"
+      if ! GOBIN="${INSTALL_DIR}" go install "${MODULE_PATH}@main" 2>&1; then
+        err "Both @latest and @main failed. Try with --version <pinned> or"
+        err "check the error above. Common causes: Go version < 1.21, network,"
+        err "or a broken commit on main."
+        return 1
+      fi
+    else
+      err "go install $ver failed. Check Go version (need 1.21+) and network."
+      return 1
+    fi
+  fi
   # go install names the binary after the cmd directory (cmd/bett-harness
   # → bett-harness). Rename to the canonical bett-ai-harness name used by
   # the goreleaser pipeline and the release archives.
