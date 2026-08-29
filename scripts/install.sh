@@ -332,18 +332,25 @@ ensure_go
 
 # ─── PATH auto-configuration ────────────────────────────────────────────────
 configure_path() {
-  local export_line=""
+  # Export for the current shell.
   case ":$PATH:" in
-    *":$INSTALL_DIR:"*) return 0 ;; # already on PATH
+    *":$INSTALL_DIR:"*) : ;;  # already on PATH for current process
+    *) export PATH="$INSTALL_DIR:$PATH" ;;
   esac
 
-  # Export for the current shell.
-  export PATH="$INSTALL_DIR:$PATH"
-
-  # Persist to the appropriate rc file(s).
+  # Persist to the appropriate rc file(s) so future shells also pick it up.
   local rc_file=""
   local shell_name="${SHELL:-}"
-  case "$(basename "${shell_name:-/bin/sh}")" in
+  # When the script is piped via 'curl ... | bash', $SHELL may be empty;
+  # default to bash (the most common interactive shell on servers).
+  if [[ -z "$shell_name" ]]; then
+    case "$os" in
+      darwin) shell_name="/bin/zsh" ;;  # macOS default since Catalina
+      linux)  shell_name="/bin/bash" ;;
+      *)      shell_name="/bin/sh" ;;
+    esac
+  fi
+  case "$(basename "$shell_name")" in
     zsh)  rc_file="$HOME/.zshrc" ;;
     bash)
       if [[ -f "$HOME/.bashrc" ]]; then
