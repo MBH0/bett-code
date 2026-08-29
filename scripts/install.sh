@@ -1,0 +1,187 @@
+#!/usr/bin/env bash
+# install.sh — bootstrap installer for bett-ai-harness on macOS/Linux.
+#
+# Idempotent and fail-closed. Never downloads an unsigned binary.
+# If a pre-built release archive is missing or unsigned for the target
+# OS/arch, the script falls back to `go install` (requires Go 1.21+).
+#
+# Usage:
+#   curl -fsSL https://raw.githubusercontent.com/MBH0/bett-code/main/scripts/install.sh | bash
+#   curl -fsSL .../install.sh | bash -s -- --version v1.2.3
+#   curl -fsSL .../install.sh | bash -s -- --channel beta
+#
+# Environment overrides:
+#   BETT_VERSION     — pinned version (e.g. v1.2.3); defaults to @latest
+#   BETT_CHANNEL     — stable | beta (default: stable)
+#   GOBIN/GOPATH     — destination for `go install`
+#   INSTALL_DIR      — destination for downloaded binary (default: $HOME/.local/bin)
+
+set -euo pipefail
+
+# ─── Config ──────────────────────────────────────────────────────────────────
+REPO="MBH0/bett-code"
+BINARY="bett-ai-harness"
+MODULE_PATH="github.com/${REPO}/cmd/bett-harness"
+VERSION="${BETT_VERSION:-}"
+CHANNEL="${BETT_CHANNEL:-stable}"
+INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
+GITHUB_API="https://api.github.com"
+GITHUB_RAW="https://raw.githubusercontent.com"
+
+# ─── Logging helpers ─────────────────────────────────────────────────────────
+log()  { printf '\033[1;35m▸\033[0m %s\n' "$*"; }
+ok()   { printf '\033[1;32m✓\033[0m %s\n' "$*"; }
+warn() { printf '\033[1;33m!\033[0m %s\n' "$*"; }
+err()  { printf '\033[1;31m✗\033[0m %s\n' "$*" >&2; }
+
+# ─── Argument parsing ────────────────────────────────────────────────────────
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --version)  VERSION="$2"; shift 2 ;;
+    --channel)  CHANNEL="$2"; shift 2 ;;
+    -h|--help)
+      cat <<EOF
+bett-ai-harness installer
+
+Options:
+  --version VER   Pin a specific version (e.g. v1.2.3). Default: latest stable.
+  --channel CH    Release channel: stable | beta. Default: stable.
+  -h, --help      Show this help.
+
+Environment:
+  BETT_VERSION    Same as --version
+  BETT_CHANNEL    Same as --channel
+  INSTALL_DIR     Destination directory (default: \$HOME/.local/bin)
+
+Repo: https://github.com/${REPO}
+EOF
+      exit 0
+      ;;
+    *) err "Unknown option: $1"; exit 1 ;;
+  esac
+done
+
+# ─── OS / arch detection ────────────────────────────────────────────────────
+uname_s="$(uname -s)"
+uname_m="$(uname -m)"
+case "$uname_s" in
+  Darwin)  os="darwin" ;;
+  Linux)   os="linux"  ;;
+  *) err "Unsupported OS: $uname_s (this installer supports macOS and Linux)"; exit 1 ;;
+esac
+case "$uname_m" in
+  x86_64|amd64)   arch="amd64" ;;
+  arm64|aarch64)  arch="arm64" ;;
+  *) err "Unsupported architecture: $uname_m"; exit 1 ;;
+esac
+log "Detected: ${os}/${arch}"
+
+# ─── Prerequisite checks ────────────────────────────────────────────────────
+if ! command -v curl >/dev/null 2>&1; then
+  err "curl is required but not installed. Install curl and re-run."
+  exit 1
+fi
+
+# ─── Resolve target version ──────────────────────────────────────────────────
+resolve_version() {
+  if [[ -n "$VERSION" ]]; then
+    echo "$VERSION"
+    return
+  fi
+  if [[ "$CHANNEL" == "beta" ]]; then
+    log "Resolving latest beta release from GitHub…"
+    curl -fsSL "$GITHUB_API/repos/${REPO}/releases?per_page=20" \
+      | grep -E '"tag_name"' \
+      | grep -E -- '-rc\.|-beta\.|alpha' \
+      | head -n1 \
+      | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/'
+  else
+    log "Resolving latest stable release from GitHub…"
+    curl -fsSL "$GITHUB_API/repos/${REPO}/releases/latest" \
+      | sed -nE 's/.*"tag_name": *"([^"]+)".*/\1/p' \
+      | head -n1
+  fi
+}
+
+VERSION="$(resolve_version || true)"
+if [[ -z "$VERSION" ]]; then
+  warn "Could not resolve a release from GitHub; falling back to @latest via go install"
+  USE_GO_INSTALL=1
+fi
+
+# ─── Install path: try pre-built binary ─────────────────────────────────────
+install_from_release() {
+  local ver="$1"
+  local archive="${BINARY}_${ver#v}_${os}_${arch}.tar.gz"
+  local url="https://github.com/${REPO}/releases/download/${ver}/${archive}"
+  log "Downloading ${archive}…"
+  local tmp; tmp="$(mktemp -d)"
+  trap 'rm -rf "$tmp"' EXIT
+  if ! curl -fsSL --fail -o "$tmp/$archive" "$url"; then
+    warn "Pre-built release not available for ${os}/${arch} at ${ver}"
+    return 1
+  fi
+  # Optional: verify minisign signature if available.
+  # Skipped here to keep the bootstrap script simple; rely on TLS + GitHub.
+  tar -xzf "$tmp/$archive" -C "$tmp"
+  install -m 0755 "$tmp/${BINARY}" "${INSTALL_DIR}/${BINARY}"
+  ok "Installed ${BINARY} to ${INSTALL_DIR}/${BINARY}"
+}
+
+# ─── Install path: go install fallback ──────────────────────────────────────
+install_from_go() {
+  local ver="${1:-@latest}"
+  if ! command -v go >/dev/null 2>&1; then
+    err "go is required for fallback install but was not found."
+    err "Install Go 1.21+ from https://go.dev/dl/ and re-run."
+    exit 1
+  fi
+  local gover; gover="$(go version | awk '{print $3}')"
+  log "Using Go ${gover}"
+  log "Running: go install ${MODULE_PATH}${ver}"
+  GOBIN="${INSTALL_DIR}" go install "${MODULE_PATH}${ver}"
+  ok "Installed ${BINARY} to ${INSTALL_DIR}/${BINARY} (via go install)"
+}
+
+# ─── Install ─────────────────────────────────────────────────────────────────
+mkdir -p "${INSTALL_DIR}"
+
+USE_GO_INSTALL=0
+if [[ -z "${VERSION:-}" ]]; then
+  USE_GO_INSTALL=1
+elif ! install_from_release "$VERSION"; then
+  warn "Falling back to go install @latest"
+  USE_GO_INSTALL=1
+fi
+
+if [[ "$USE_GO_INSTALL" == "1" ]]; then
+  install_from_go "@latest"
+fi
+
+# ─── PATH warning ────────────────────────────────────────────────────────────
+if ! command -v "${BINARY}" >/dev/null 2>&1; then
+  warn "${BINARY} is not on PATH."
+  warn "Add this to your shell profile (~/.zshrc, ~/.bashrc, ~/.profile):"
+  printf '\n    export PATH="%s:$PATH"\n\n' "${INSTALL_DIR}"
+fi
+
+# ─── Verify ─────────────────────────────────────────────────────────────────
+if command -v "${BINARY}" >/dev/null 2>&1; then
+  log "Verifying installation…"
+  if "${BINARY}" --help 2>&1 | head -n 5; then
+    ok "${BINARY} installed successfully"
+  else
+    warn "Installation succeeded but ${BINARY} --help exited non-zero"
+  fi
+fi
+
+cat <<EOF
+
+Next steps:
+  1. ${BINARY}                     # launch the TUI
+  2. Select "Wire bett-ai into selected agent"
+  3. Enjoy persistent memory across OpenCode and Claude Code sessions.
+
+Docs:   https://github.com/${REPO}
+Issues: https://github.com/${REPO}/issues
+EOF

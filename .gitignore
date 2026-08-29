@@ -1,0 +1,17 @@
+# Binaries
+/bett-ai-harness
+bett-harness
+/dist/
+/bin/
+
+# Go
+*.test
+*.out
+coverage.*
+
+# OS / editor
+.DS_Store
+*.swp
+
+# Local config (never commit secrets)
+.engram/

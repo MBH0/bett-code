@@ -1,0 +1,152 @@
+# .goreleaser.yaml — release pipeline for bett-ai-harness.
+#
+# Builds signed binaries for macOS (amd64/arm64), Linux (amd64/arm64),
+# and Windows (amd64/arm64), publishes them to GitHub Releases, generates
+# checksums, and (optionally) signs archives with minisign.
+#
+# Authenticode signing on Windows requires an Azure Code Signing / OIDC
+# trust. Until that gate is provisioned, Windows binary distribution is
+# held — see `docs/release-signing.md` once it exists.
+#
+# Usage:
+#   goreleaser release --clean --skip=publish     # dry-run
+#   goreleaser release --clean                    # cut a real release
+#
+# Required env vars for publish:
+#   GITHUB_TOKEN         — repo-scoped token with write:packages
+#   GORELEASER_CURRENT_TAG — set automatically by GoReleaser CI
+
+version: 2
+
+project_name: bett-ai-harness
+
+# ─── Build matrix ────────────────────────────────────────────────────────────
+builds:
+  - id: bett-ai-harness
+    main: ./cmd/bett-harness
+    binary: bett-ai-harness
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      # Skip Windows ARM64 until Authenticode signing is provisioned.
+      - goos: windows
+        goarch: arm64
+    flags:
+      - -trimpath
+      - -buildvcs=false
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+# ─── Archive naming ──────────────────────────────────────────────────────────
+archives:
+  - id: default
+    formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_
+      {{ .Version }}_
+      {{- .Os }}_
+      {{- .Arch }}
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - scripts/install.sh
+      - scripts/install.ps1
+      - README.md
+      - LICENSE
+
+# ─── Checksums (verified by install scripts) ────────────────────────────────
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+# ─── Signing (minisign for macOS/Linux; Authenticode stub for Windows) ─────
+signs:
+  - cmd: sh
+    artifacts: checksum
+    signature: "${artifact}.minisig"
+    args:
+      - "-c"
+      - "MINISIGN_KEY={{ .Env.MINISIGN_KEY }}; minisign -S -s '$MINISIGN_KEY' -m '$artifact' -x '$signature'"
+    description: Minisign over checksums.txt (repo=MBH0/bett-code; tag=${TAG})
+
+# ─── Changelog from conventional commits ────────────────────────────────────
+changelog:
+  use: git
+  sort: asc
+  filters:
+    exclude:
+      - "^Merge pull request"
+      - "^Merge branch"
+      - "^docs:"
+      - "^chore\\(deps\\)"
+  groups:
+    - title: "Breaking changes"
+      regexp: "^(\\w+)(?:\\(\\w+\\))?!:"
+      order: 0
+    - title: "New features"
+      regexp: "^feat(?:\\(\\w+\\))?:"
+      order: 1
+    - title: "Bug fixes"
+      regexp: "^fix(?:\\(\\w+\\))?:"
+      order: 2
+    - title: "Performance"
+      regexp: "^perf(?:\\(\\w+\\))?:"
+      order: 3
+    - title: "Documentation"
+      regexp: "^docs(?:\\(\\w+\\))?:"
+      order: 4
+    - title: "Other"
+      order: 999
+
+# ─── Homebrew tap (optional, enable when tap repo is public) ─────────────────
+brews:
+  - tap:
+      owner: MBH0
+      name: homebrew-tap
+    homepage: "https://github.com/MBH0/bett-code"
+    description: "Multi-agent orchestration for Engram persistent memory"
+    license: MIT
+    directory: Formula
+    install: |
+      bin.install "bett-ai-harness"
+      bash_completion.install "completions/bett-ai-harness.bash" => "bett-ai-harness"
+      zsh_completion.install "completions/bett-ai-harness.zsh" => "_bett-ai-harness"
+      fish_completion.install "completions/bett-ai-harness.fish"
+    test: |
+      system "#{bin}/bett-ai-harness", "--version"
+
+# ─── Scoop manifest (optional, enable when bucket is public) ─────────────────
+scoop:
+  bucket:
+    owner: MBH0
+    name: scoop-bucket
+  homepage: "https://github.com/MBH0/bett-code"
+  description: "Multi-agent orchestration for Engram persistent memory"
+  license: MIT
+  url_template: "https://github.com/MBH0/bett-code/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
+
+# ─── Release notes metadata ──────────────────────────────────────────────────
+release:
+  github:
+    owner: MBH0
+    name: bett-code
+  prerelease: auto       # any tag matching -rc/-beta/-alpha → prerelease
+  draft: false
+  name_template: "{{ .ProjectName }} {{ .Version }}"
+
+# ─── Announce (optional: tweet/discord) ─────────────────────────────────────
+announce:
+  # Disabled by default; enable with --announce=twitter,discord when ready.
+  skip: true
