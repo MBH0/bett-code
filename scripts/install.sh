@@ -154,15 +154,25 @@ install_from_go() {
 # ─── Install ─────────────────────────────────────────────────────────────────
 mkdir -p "${INSTALL_DIR}"
 
+# If the user pinned a version via --version / BETT_VERSION, pass it through to
+# 'go install' as @<version>. The release-archive path is skipped only when no
+# version was resolved at all.
+GO_INSTALL_REF="@latest"
+if [[ -n "$VERSION" ]]; then
+  # Strip the leading 'v' from v1.2.3 / v0.0.0-<ts>-<sha> for the go install
+  # reference (Go pseudo-versions use the bare string after 'v').
+  GO_INSTALL_REF="@${VERSION#v}"
+fi
+
 if [[ "$USE_GO_INSTALL" == "0" ]]; then
   if ! install_from_release "$VERSION"; then
-    warn "Falling back to go install @latest"
+    warn "Falling back to go install ${GO_INSTALL_REF}"
     USE_GO_INSTALL=1
   fi
 fi
 
 if [[ "$USE_GO_INSTALL" == "1" ]]; then
-  install_from_go "@latest"
+  install_from_go "$GO_INSTALL_REF"
 fi
 
 # ─── PATH warning ────────────────────────────────────────────────────────────
