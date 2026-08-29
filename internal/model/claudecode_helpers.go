@@ -2,7 +2,7 @@
 // that only need ClaudeConfigDir do not pull in the rest of claudecode.
 package model
 
-import "bett-ai-harness/internal/claudecode"
+import "github.com/MBH0/bett-code/internal/claudecode"
 
 // ClaudeConfigDir returns Claude Code's global config directory.
 // Cross-platform: ~/.claude on POSIX, %USERPROFILE%\.claude on Windows.

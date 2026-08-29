@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"bett-ai-harness/internal/harness"
-	"bett-ai-harness/internal/model"
+	"github.com/MBH0/bett-code/internal/harness"
+	"github.com/MBH0/bett-code/internal/model"
 )
 
 // viewWelcome renders the multi-agent status panel plus the orchestrated menu.

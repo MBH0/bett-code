@@ -20,10 +20,10 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"bett-ai-harness/internal/engram"
-	"bett-ai-harness/internal/harness"
-	"bett-ai-harness/internal/opencode"
-	"bett-ai-harness/internal/tui"
+	"github.com/MBH0/bett-code/internal/engram"
+	"github.com/MBH0/bett-code/internal/harness"
+	"github.com/MBH0/bett-code/internal/opencode"
+	"github.com/MBH0/bett-code/internal/tui"
 )
 
 // requireEngram skips the test when the engram binary is not installed.

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"bett-ai-harness/internal/engram"
-	"bett-ai-harness/internal/opencode"
+	"github.com/MBH0/bett-code/internal/engram"
+	"github.com/MBH0/bett-code/internal/opencode"
 )
 
 // stubLookPaths makes opencode and engram appear installed so harness tests

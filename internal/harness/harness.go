@@ -13,11 +13,11 @@ import (
 	"sort"
 	"strings"
 
-	"bett-ai-harness/internal/assets"
-	"bett-ai-harness/internal/claudecode"
-	"bett-ai-harness/internal/engram"
-	"bett-ai-harness/internal/model"
-	"bett-ai-harness/internal/opencode"
+	"github.com/MBH0/bett-code/internal/assets"
+	"github.com/MBH0/bett-code/internal/claudecode"
+	"github.com/MBH0/bett-code/internal/engram"
+	"github.com/MBH0/bett-code/internal/model"
+	"github.com/MBH0/bett-code/internal/opencode"
 )
 
 // Step is one line of an operation result, shown as ✓/✗ in the TUI.

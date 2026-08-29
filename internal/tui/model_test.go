@@ -6,7 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"bett-ai-harness/internal/harness"
+	"github.com/MBH0/bett-code/internal/harness"
 )
 
 // keyMsg builds a tea.KeyMsg for the given key string, mirroring how

@@ -12,8 +12,8 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"bett-ai-harness/internal/harness"
-	"bett-ai-harness/internal/model"
+	"github.com/MBH0/bett-code/internal/harness"
+	"github.com/MBH0/bett-code/internal/model"
 )
 
 // ─── Screens ─────────────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-module bett-ai-harness
+module github.com/MBH0/bett-code
 
 go 1.26
 

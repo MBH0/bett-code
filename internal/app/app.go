@@ -9,7 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"bett-ai-harness/internal/tui"
+	"github.com/MBH0/bett-code/internal/tui"
 )
 
 // Version is the build version of the harness, set at compile time.

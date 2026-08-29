@@ -4,7 +4,7 @@
 // gentle-ai pattern: a common Agent interface + per-agent status types.
 package model
 
-import "bett-ai-harness/internal/opencode"
+import "github.com/MBH0/bett-code/internal/opencode"
 
 // AgentKind enumerates the supported coding agents the harness can target.
 type AgentKind string
