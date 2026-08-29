@@ -459,10 +459,11 @@ seed_sdd_profiles() {
   fi
 
   # Apply per-phase overrides from --model-<phase>=<model> or BETT_MODEL_<PHASE>.
-  local phase phase_upper model
+  # Bash doesn't support ${VAR_${OTHER}} indirect expansion in older syntax,
+  # so we expand by name with `env` then `printenv`.
+  local phase model
   for phase in orchestrator explore propose spec design tasks apply verify archive; do
-    phase_upper="$(printf '%s' "$phase" | tr '[:lower:]' '[:upper:]')"
-    model="${BETT_MODEL_${phase_upper}:-}"
+    model="$(env | awk -F= -v phase="$phase" 'BEGIN{p=toupper(phase)} $1=="BETT_MODEL_"p {print substr($0, length($1)+2); exit}')"
     if [[ -z "$model" ]]; then continue; fi
     "$BINARY" set-model "$AGENT" "$SDD_PROFILE" "$phase" "$model" >&2
     ok "Set ${AGENT}/${SDD_PROFILE}/${phase} = ${model}"
