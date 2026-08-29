@@ -142,6 +142,12 @@ install_from_go() {
   log "Using Go ${gover}"
   log "Running: GOBIN=${INSTALL_DIR} go install ${MODULE_PATH}${ver}"
   GOBIN="${INSTALL_DIR}" go install "${MODULE_PATH}${ver}"
+  # go install names the binary after the cmd directory (cmd/bett-harness
+  # → bett-harness). Rename to the canonical bett-ai-harness name used by
+  # the goreleaser pipeline and the release archives.
+  if [[ -f "${INSTALL_DIR}/bett-harness" && ! -f "${INSTALL_DIR}/${BINARY}" ]]; then
+    mv "${INSTALL_DIR}/bett-harness" "${INSTALL_DIR}/${BINARY}"
+  fi
   ok "Installed ${BINARY} to ${INSTALL_DIR}/${BINARY} (via go install)"
 }
 
