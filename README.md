@@ -19,7 +19,21 @@ Run `bett-ai-harness` to get a multi-agent status panel plus an 8-action orchest
 
 Pick the layer that matches your environment. All three install from this same repo.
 
-### Layer 1: One-liner bootstrap (recommended)
+### Zero-deps bootstrap (works on a fresh server)
+
+The bootstrap installer handles **everything** from a clean machine:
+
+| Step | What it does |
+| --- | --- |
+| 1. Detect OS + arch | `uname -sm` / `$env:PROCESSOR_ARCHITECTURE` |
+| 2. Install `curl`, `git`, `tar` if missing | Via the system package manager (apt / dnf / yum / pacman / apk / zypper / brew) |
+| 3. Install Go 1.21+ if missing or outdated | Package manager first; falls back to the official tarball at `~/.local/go` (no sudo) |
+| 4. Try the pre-built release archive | From `releases/download/<tag>/` on GitHub |
+| 5. Fall back to `go install @<version>` (or `@main`) | Build from source |
+| 6. Configure `PATH` for current + future shells | Writes to `~/.zshrc`, `~/.bashrc`, `~/.profile`, or `~/.config/fish/config.fish` |
+| 7. Verify with `<binary> --version` | Exits non-zero on any failure |
+
+No manual prerequisites — just `curl | bash`.
 
 **macOS / Linux:**
 
