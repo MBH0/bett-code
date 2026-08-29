@@ -469,8 +469,6 @@ seed_sdd_profiles() {
   done
 }
 
-seed_sdd_profiles || true
-
 # ─── Start engram serve in background (best-effort) ─────────────────────────
 start_engram_serve() {
   if ! command -v "$ENGRAM_BINARY" >/dev/null 2>&1; then return 0; fi
@@ -663,6 +661,9 @@ fi
 if [[ "$USE_GO_INSTALL" == "1" ]]; then
   install_from_go "$GO_INSTALL_REF"
 fi
+
+# ─── SDD profile seeding (must run AFTER bett-ai-harness is installed) ─────
+seed_sdd_profiles || true
 
 # ─── PATH configuration (after install so we know the final path) ──────────
 configure_path
