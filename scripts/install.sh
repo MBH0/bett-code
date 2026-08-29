@@ -159,9 +159,8 @@ mkdir -p "${INSTALL_DIR}"
 # version was resolved at all.
 GO_INSTALL_REF="@latest"
 if [[ -n "$VERSION" ]]; then
-  # Strip the leading 'v' from v1.2.3 / v0.0.0-<ts>-<sha> for the go install
-  # reference (Go pseudo-versions use the bare string after 'v').
-  GO_INSTALL_REF="@${VERSION#v}"
+  # Keep the leading 'v' — 'go install' accepts @vX.Y.Z / @v0.0.0-<ts>-<sha>.
+  GO_INSTALL_REF="@${VERSION}"
 fi
 
 if [[ "$USE_GO_INSTALL" == "0" ]]; then
