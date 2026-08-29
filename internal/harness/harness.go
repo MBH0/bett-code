@@ -267,15 +267,27 @@ func agentPaths(kind model.AgentKind) (string, string, error) {
 
 const sddProfilesPath = "sdd-profiles.json"
 
-// sddProfilesFile returns the per-agent config dir path for SDD profiles.
-func sddProfilesFile(kind model.AgentKind) string {
+// SDDProfilesFileFor returns the per-agent config dir path for SDD profiles.
+// Exported so the non-interactive CLI can show users where the file lives.
+func SDDProfilesFileFor(kind model.AgentKind) string {
 	return filepath.Join(model.AgentConfigDir(kind), sddProfilesPath)
+}
+
+// sddProfilesFile is the unexported alias used internally.
+func sddProfilesFile(kind model.AgentKind) string {
+	return SDDProfilesFileFor(kind)
 }
 
 // loadSDDProfiles reads the configured profiles for the active agent. Missing
 // files yield the default profile set.
 func loadSDDProfiles() []model.SDDProfile {
 	return loadSDDProfilesFor(model.AgentOpenCode)
+}
+
+// LoadSDDProfilesFor loads profiles for a specific agent. Exported so the
+// non-interactive CLI can read what is on disk without re-seeding defaults.
+func LoadSDDProfilesFor(kind model.AgentKind) []model.SDDProfile {
+	return loadSDDProfilesFor(kind)
 }
 
 // loadSDDProfilesFor loads profiles for a specific agent.
@@ -295,6 +307,12 @@ func loadSDDProfilesFor(kind model.AgentKind) []model.SDDProfile {
 	return profiles
 }
 
+// SaveSDDProfilesFor persists the profile list for an agent. Exported so the
+// non-interactive CLI can write profile files explicitly.
+func SaveSDDProfilesFor(kind model.AgentKind, profiles []model.SDDProfile) error {
+	return saveSDDProfilesFor(kind, profiles)
+}
+
 // saveSDDProfilesFor persists the profile list for an agent.
 func saveSDDProfilesFor(kind model.AgentKind, profiles []model.SDDProfile) error {
 	path := sddProfilesFile(kind)
@@ -309,13 +327,71 @@ func saveSDDProfilesFor(kind model.AgentKind, profiles []model.SDDProfile) error
 	return os.WriteFile(path, data, 0o644)
 }
 
+// DefaultSDDProfiles returns the gentle-orchestrator default profile set.
+// Exported so the non-interactive CLI can seed the file.
+func DefaultSDDProfiles() []model.SDDProfile {
+	return defaultSDDProfiles()
+}
+
 // defaultSDDProfiles returns the gentle-orchestrator default profile set.
+// Each profile assigns one model per SDD phase — mirror the Carriles split
+// from gentle-ai: sdd-strong phases (orchestrator/explore/propose/spec/
+// design/verify) reason over context, sdd-mid phases (apply) write code in
+// an agentic loop, sdd-cheap phases (tasks/archive) do structured
+// transcription. Phase-by-phase model IDs match gentle-ai's defaults.
 func defaultSDDProfiles() []model.SDDProfile {
-	return []model.SDDProfile{
-		{Name: "default", Phase: "orchestrator", Model: "anthropic/claude-sonnet-4-20250514", Enabled: true},
-		{Name: "cheap", Phase: "apply", Model: "openrouter/qwen/qwen3-30b-a3b:free", Enabled: false},
-		{Name: "premium", Phase: "design", Model: "anthropic/claude-sonnet-4-20250514", Enabled: false},
+	const sonnet = "anthropic/claude-sonnet-4-20250514"
+	const haiku = "anthropic/claude-haiku-3-5-20241022"
+	const opus = "anthropic/claude-opus-4-20250514"
+	const qwen = "openrouter/qwen/qwen3-30b-a3b:free"
+
+	defaultProfile := model.SDDProfile{
+		Name: "default",
+		Enabled: true,
+		Models: map[model.SDDPhase]string{
+			model.PhaseOrchestrator: sonnet,
+			model.PhaseExplore:      sonnet,
+			model.PhasePropose:      sonnet,
+			model.PhaseSpec:         sonnet,
+			model.PhaseDesign:       sonnet,
+			model.PhaseTasks:        haiku,
+			model.PhaseApply:        sonnet,
+			model.PhaseVerify:       sonnet,
+			model.PhaseArchive:      haiku,
+		},
 	}
+	cheapProfile := model.SDDProfile{
+		Name:    "cheap",
+		Enabled: false,
+		Models: map[model.SDDPhase]string{
+			model.PhaseOrchestrator: haiku,
+			model.PhaseExplore:      haiku,
+			model.PhasePropose:      qwen,
+			model.PhaseSpec:         qwen,
+			model.PhaseDesign:       qwen,
+			model.PhaseTasks:        qwen,
+			model.PhaseApply:        qwen,
+			model.PhaseVerify:       qwen,
+			model.PhaseArchive:      qwen,
+		},
+	}
+	premiumProfile := model.SDDProfile{
+		Name:    "premium",
+		Enabled: false,
+		Models: map[model.SDDPhase]string{
+			model.PhaseOrchestrator: opus,
+			model.PhaseExplore:      opus,
+			model.PhasePropose:      opus,
+			model.PhaseSpec:         sonnet,
+			model.PhaseDesign:       opus,
+			model.PhaseTasks:        sonnet,
+			model.PhaseApply:        sonnet,
+			model.PhaseVerify:       opus,
+			model.PhaseArchive:      haiku,
+		},
+	}
+
+	return []model.SDDProfile{defaultProfile, cheapProfile, premiumProfile}
 }
 
 // ToggleSDDProfile enables/disables the named profile for the active agent.
@@ -336,6 +412,66 @@ func ToggleSDDProfile(kind model.AgentKind, name string) (model.SDDProfile, erro
 		return target, err
 	}
 	return target, nil
+}
+
+// ActivateProfile enables the named profile and disables all others. This
+// is the equivalent of selecting one profile in the TUI.
+func ActivateProfile(kind model.AgentKind, name string) error {
+	profiles := loadSDDProfilesFor(kind)
+	found := false
+	for i := range profiles {
+		profiles[i].Enabled = profiles[i].Name == name
+		if profiles[i].Enabled {
+			found = true
+		}
+	}
+	if !found {
+		return fmt.Errorf("profile %q not found", name)
+	}
+	return saveSDDProfilesFor(kind, profiles)
+}
+
+// SetProfilePhaseModel assigns a model to a specific phase of a profile.
+// Returns ErrProfileNotFound or ErrPhaseUnknown for invalid inputs.
+func SetProfilePhaseModel(kind model.AgentKind, profileName string, phase model.SDDPhase, modelID string) error {
+	profiles := loadSDDProfilesFor(kind)
+	idx := -1
+	for i := range profiles {
+		if profiles[i].Name == profileName {
+			idx = i
+			break
+		}
+	}
+	if idx == -1 {
+		return fmt.Errorf("profile %q not found", profileName)
+	}
+	if profiles[idx].Models == nil {
+		profiles[idx].Models = map[model.SDDPhase]string{}
+	}
+	profiles[idx].Models[phase] = modelID
+	return saveSDDProfilesFor(kind, profiles)
+}
+
+// ProfileForPhase returns the model assigned to a phase in the active profile
+// (the first enabled profile). Falls back to the default profile's model for
+// that phase, then to an empty string.
+func ProfileForPhase(kind model.AgentKind, phase model.SDDPhase) string {
+	profiles := loadSDDProfilesFor(kind)
+	for _, p := range profiles {
+		if p.Enabled {
+			if m, ok := p.Models[phase]; ok && m != "" {
+				return m
+			}
+		}
+	}
+	for _, p := range profiles {
+		if p.Name == "default" {
+			if m, ok := p.Models[phase]; ok {
+				return m
+			}
+		}
+	}
+	return ""
 }
 
 // ─── Review mode (RDD) ──────────────────────────────────────────────────────

@@ -15,19 +15,32 @@
 # PATH is auto-configured for the current shell and appended to the
 # appropriate shell rc file (~/.bashrc, ~/.zshrc, ~/.profile, ~/.config/fish/config.fish).
 #
+# In addition to the harness binary, the bootstrap also installs Engram
+# (persistent-memory backend, via brew tap or `go install`) and seeds the
+# SDD profile set (default / cheap / premium) into the active agent's
+# config dir. A non-interactive --sdd-profile flag lets CI / scripted
+# installs pick a profile without prompting.
+#
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/MBH0/bett-code/main/scripts/install.sh | bash
 #   curl -fsSL .../install.sh | bash -s -- --version v1.2.3
 #   curl -fsSL .../install.sh | bash -s -- --channel beta
+#   curl -fsSL .../install.sh | bash -s -- --sdd-profile cheap
+#   curl -fsSL .../install.sh | bash -s -- --model-apply openrouter/qwen/qwen3-30b-a3b:free
 #
 # Environment overrides:
-#   BETT_VERSION     — pinned version (e.g. v1.2.3); defaults to @latest
-#   BETT_CHANNEL     — stable | beta (default: stable)
-#   BETT_GO_VERSION  — Go version to install (default: 1.23.4)
-#   GOBIN/GOPATH     — destination for `go install` (default: ~/.local/go)
-#   INSTALL_DIR      — destination for downloaded binary (default: $GOBIN/bin)
-#   SKIP_AUTO_GO     — set to "1" to disable auto-install of Go
-#   SKIP_AUTO_DEPS   — set to "1" to disable auto-install of system packages
+#   BETT_VERSION              — pinned version (e.g. v1.2.3); defaults to @latest
+#   BETT_CHANNEL              — stable | beta (default: stable)
+#   BETT_GO_VERSION           — Go version to install (default: 1.23.4)
+#   BETT_SDD_PROFILE          — profile to activate: default | cheap | premium
+#   BETT_AGENT                — agent to target: opencode | claude-code (default: opencode)
+#   BETT_MODEL_<PHASE>        — per-phase override (e.g. BETT_MODEL_APPLY=...)
+#   BETT_SKIP_ENGRAM          — set to "1" to skip Engram install
+#   BETT_SKIP_PROFILES        — set to "1" to skip SDD profile seeding
+#   GOBIN/GOPATH              — destination for `go install` (default: ~/.local/go)
+#   INSTALL_DIR               — destination for downloaded binary (default: $GOBIN/bin)
+#   SKIP_AUTO_GO              — set to "1" to disable auto-install of Go
+#   SKIP_AUTO_DEPS            — set to "1" to disable auto-install of system packages
 
 set -eo pipefail
 
@@ -35,11 +48,16 @@ set -eo pipefail
 REPO="MBH0/bett-code"
 BINARY="bett-ai-harness"
 MODULE_PATH="github.com/${REPO}/cmd/bett-harness"
+ENGRAM_REPO="gentleman-programming/engram"
+ENGRAM_MODULE_PATH="github.com/${ENGRAM_REPO}/cmd/engram"
+ENGRAM_BINARY="engram"
 VERSION="${BETT_VERSION:-}"
 CHANNEL="${BETT_CHANNEL:-stable}"
 GO_VERSION="${BETT_GO_VERSION:-1.23.4}"
 GOBIN_DIR="${GOBIN:-$HOME/.local/go}"
 INSTALL_DIR="${INSTALL_DIR:-$GOBIN_DIR/bin}"
+AGENT="${BETT_AGENT:-opencode}"
+SDD_PROFILE="${BETT_SDD_PROFILE:-default}"
 GITHUB_API="https://api.github.com"
 GITHUB_RAW="https://raw.githubusercontent.com"
 GO_DL="https://go.dev/dl"
@@ -53,25 +71,57 @@ err()  { printf '\033[1;31m✗\033[0m %s\n' "$*" >&2; }
 # ─── Argument parsing ────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --version)  VERSION="$2"; shift 2 ;;
-    --channel)  CHANNEL="$2"; shift 2 ;;
+    --version)           VERSION="$2"; shift 2 ;;
+    --channel)           CHANNEL="$2"; shift 2 ;;
+    --sdd-profile)       SDD_PROFILE="$2"; shift 2 ;;
+    --agent)             AGENT="$2"; shift 2 ;;
+    --model-orchestrator) export BETT_MODEL_ORCHESTRATOR="$2"; shift 2 ;;
+    --model-explore)      export BETT_MODEL_EXPLORE="$2"; shift 2 ;;
+    --model-propose)      export BETT_MODEL_PROPOSE="$2"; shift 2 ;;
+    --model-spec)         export BETT_MODEL_SPEC="$2"; shift 2 ;;
+    --model-design)       export BETT_MODEL_DESIGN="$2"; shift 2 ;;
+    --model-tasks)        export BETT_MODEL_TASKS="$2"; shift 2 ;;
+    --model-apply)        export BETT_MODEL_APPLY="$2"; shift 2 ;;
+    --model-verify)       export BETT_MODEL_VERIFY="$2"; shift 2 ;;
+    --model-archive)      export BETT_MODEL_ARCHIVE="$2"; shift 2 ;;
     -h|--help)
       cat <<EOF
 bett-ai-harness installer
 
 Options:
-  --version VER   Pin a specific version (e.g. v1.2.3). Default: latest stable.
-  --channel CH    Release channel: stable | beta. Default: stable.
-  -h, --help      Show this help.
+  --version VER                Pin a specific version (e.g. v1.2.3). Default: latest stable.
+  --channel CH                 Release channel: stable | beta. Default: stable.
+  --agent AGENT                Target agent: opencode | claude-code. Default: opencode.
+  --sdd-profile NAME           Activate profile: default | cheap | premium.
+  --model-orchestrator MODEL   Per-phase model override (--model-<phase>=<model>).
+  --model-explore MODEL        Same for each SDD phase: orchestrator, explore,
+  --model-propose MODEL        propose, spec, design, tasks, apply, verify,
+  --model-spec MODEL           archive.
+  --model-design MODEL
+  --model-tasks MODEL
+  --model-apply MODEL
+  --model-verify MODEL
+  --model-archive MODEL
+  -h, --help                   Show this help.
 
 Environment:
   BETT_VERSION      Same as --version
   BETT_CHANNEL      Same as --channel
+  BETT_AGENT        Same as --agent
+  BETT_SDD_PROFILE  Same as --sdd-profile
+  BETT_MODEL_<PHASE>  Per-phase model override
   BETT_GO_VERSION   Go version to auto-install (default: 1.23.4)
+  BETT_SKIP_ENGRAM  Set to 1 to skip Engram install
+  BETT_SKIP_PROFILES  Set to 1 to skip SDD profile seeding
   INSTALL_DIR       Destination directory (default: ~/.local/go/bin)
   GOBIN             Same as INSTALL_DIR (go install respects this)
   SKIP_AUTO_GO      Set to 1 to refuse Go auto-install
   SKIP_AUTO_DEPS    Set to 1 to refuse system-package auto-install
+
+The bootstrap installs bett-ai-harness, Engram, and the default SDD profile
+set in one shot. Use --sdd-profile and --model-<phase> for non-interactive
+configuration; omit them and the harness will write the defaults that the
+TUI's "SDD Profiles" screen can edit later.
 
 Repo: https://github.com/${REPO}
 EOF
@@ -330,6 +380,108 @@ install_go_tarball() {
 
 ensure_go
 
+# ─── Engram auto-install ────────────────────────────────────────────────────
+ENGRAM_INSTALL_DIR="$INSTALL_DIR"   # same dir as bett-ai-harness
+ensure_engram() {
+  if command -v "$ENGRAM_BINARY" >/dev/null 2>&1; then
+    local ever; ever="$("$ENGRAM_BINARY" --version 2>&1 | head -1 || true)"
+    ok "Engram present: $ever"
+    return 0
+  fi
+  if [[ "${BETT_SKIP_ENGRAM:-0}" == "1" ]]; then
+    warn "Engram not found and BETT_SKIP_ENGRAM=1 — skipping"
+    return 0
+  fi
+  warn "Engram not found — installing"
+
+  # Prefer the brew tap on platforms where brew is available. The tap ships
+  # both macOS and Linux bottles, so it covers both via brew.
+  if [[ "$PKG_MANAGER" == "brew" ]]; then
+    if $PKG_INSTALL gentleman-programming/tap/engram 2>&1 | tail -5; then
+      if command -v "$ENGRAM_BINARY" >/dev/null 2>&1; then
+        ok "Installed Engram via brew tap"
+        return 0
+      fi
+    fi
+    warn "brew install failed; falling back to 'go install'"
+  fi
+
+  # Fallback: go install the upstream module.
+  local engram_log; engram_log="$(mktemp)"
+  set +e
+  GOBIN="${ENGRAM_INSTALL_DIR}" go install "${ENGRAM_MODULE_PATH}@latest" 2>&1 | tee "$engram_log"
+  local status="${PIPESTATUS[0]}"
+  set -e
+  if [[ "$status" -ne 0 ]]; then
+    warn "go install engram @latest failed; trying @main"
+    set +e
+    GOBIN="${ENGRAM_INSTALL_DIR}" go install "${ENGRAM_MODULE_PATH}@main" 2>&1 | tee -a "$engram_log"
+    status="${PIPESTATUS[0]}"
+    set -e
+  fi
+  rm -f "$engram_log"
+  if [[ "$status" -ne 0 ]]; then
+    err "Could not install Engram. Install manually:"
+    err "  brew install gentleman-programming/tap/engram"
+    err "  go install github.com/${ENGRAM_REPO}/cmd/engram@latest"
+    return 1
+  fi
+  ok "Installed Engram via go install @${ENGRAM_MODULE_PATH}"
+}
+
+ensure_engram
+
+# ─── SDD profile seeding + model assignment ─────────────────────────────────
+seed_sdd_profiles() {
+  if [[ "${BETT_SKIP_PROFILES:-0}" == "1" ]]; then
+    warn "BETT_SKIP_PROFILES=1 — skipping SDD profile seeding"
+    return 0
+  fi
+  if ! command -v "$BINARY" >/dev/null 2>&1; then
+    warn "bett-ai-harness not on PATH; cannot seed profiles"
+    return 0
+  fi
+  log "Seeding SDD profile set for ${AGENT}…"
+  "$BINARY" seed-profiles "$AGENT" >&2
+  ok "SDD profile set written"
+
+  # Apply BETT_SDD_PROFILE activation (enable the chosen profile, disable others).
+  if [[ -n "$SDD_PROFILE" ]]; then
+    case "$SDD_PROFILE" in
+      default|cheap|premium) : ;;
+      *) err "Unknown --sdd-profile '$SDD_PROFILE' (valid: default | cheap | premium)"; return 1 ;;
+    esac
+    "$BINARY" activate-profile "$AGENT" "$SDD_PROFILE" >&2
+    ok "Active profile: ${SDD_PROFILE}"
+  fi
+
+  # Apply per-phase overrides from --model-<phase>=<model> or BETT_MODEL_<PHASE>.
+  local phase phase_upper model
+  for phase in orchestrator explore propose spec design tasks apply verify archive; do
+    phase_upper="$(printf '%s' "$phase" | tr '[:lower:]' '[:upper:]')"
+    model="${BETT_MODEL_${phase_upper}:-}"
+    if [[ -z "$model" ]]; then continue; fi
+    "$BINARY" set-model "$AGENT" "$SDD_PROFILE" "$phase" "$model" >&2
+    ok "Set ${AGENT}/${SDD_PROFILE}/${phase} = ${model}"
+  done
+}
+
+seed_sdd_profiles
+
+# ─── Start engram serve in background (best-effort) ─────────────────────────
+start_engram_serve() {
+  if ! command -v "$ENGRAM_BINARY" >/dev/null 2>&1; then return 0; fi
+  # Only start if not already running on the default port.
+  if "$ENGRAM_BINARY" serve --help 2>/dev/null | head -1 >/dev/null; then
+    if "$ENGRAM_BINARY" mcp --help 2>/dev/null | head -1 >/dev/null; then
+      log "Starting 'engram serve' in background…"
+      nohup "$ENGRAM_BINARY" serve >/dev/null 2>&1 &
+      sleep 1
+      ok "engram serve started (pid $!)"
+    fi
+  fi
+}
+
 # ─── PATH auto-configuration ────────────────────────────────────────────────
 configure_path() {
   # Export for the current shell.
@@ -526,13 +678,23 @@ else
   warn "Restart your shell, or run: export PATH=\"${INSTALL_DIR}:\$PATH\""
 fi
 
+# ─── Start Engram in background (best-effort) ──────────────────────────────
+start_engram_serve
+
 cat <<EOF
 
 Next steps:
   1. Restart your shell (or: exec \$SHELL) to pick up the new PATH.
   2. ${BINARY}                       # launch the TUI
-  3. Select "Wire bett-ai into selected agent"
-  4. Enjoy persistent memory across OpenCode and Claude Code sessions.
+  3. Select "Wire bett-ai into selected agent" (targets ${AGENT})
+  4. Configure models per SDD phase via "SDD Profiles" (or pass
+     --sdd-profile and --model-<phase>=<model> to this installer to script it).
+
+Installed in one shot:
+  • bett-ai-harness  ${BINARY}    (Go TUI for OpenCode / Claude Code)
+  • engram          ${ENGRAM_BINARY}  (persistent memory backend)
+  • SDD profiles    default, cheap, premium  (active: ${SDD_PROFILE})
+  • PATH exports    ${INSTALL_DIR}  (added to your shell rc)
 
 Docs:   https://github.com/${REPO}
 Issues: https://github.com/${REPO}/issues

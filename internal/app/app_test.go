@@ -34,7 +34,7 @@ func TestUnknownFlag(t *testing.T) {
 	if err := Run([]string{"--bogus"}, &out, &errW); err == nil {
 		t.Fatal("expected error for unknown flag")
 	}
-	if !strings.Contains(errW.String(), "unknown argument") {
+	if !strings.Contains(errW.String(), "unknown command") {
 		t.Errorf("stderr = %q", errW.String())
 	}
 }

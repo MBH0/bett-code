@@ -169,14 +169,27 @@ func (m Model) viewSDDProfiles() string {
 			if p.Enabled {
 				mark = okStyle.Render("●")
 			}
-			line := fmt.Sprintf("%s  %-10s  phase=%-12s  model=%s",
-				mark, p.Name, p.Phase, p.Model)
+			orchestrator := p.Models[model.PhaseOrchestrator]
+			if orchestrator == "" {
+				orchestrator = "(unset)"
+			}
+			nPhases := len(p.Models)
+			line := fmt.Sprintf("%s  %-10s  orchestrator=%s  (%d phases)",
+				mark, p.Name, orchestrator, nPhases)
 			if i == m.subCursor {
 				b.WriteString(menuSelStyle.Render("▸ " + line))
 			} else {
 				b.WriteString(menuItemStyle.Render("  " + line))
 			}
 			b.WriteString("\n")
+			// Show per-phase assignments as a sub-list.
+			for _, phase := range model.AllPhases {
+				if m, ok := p.Models[phase]; ok && m != "" {
+					subline := fmt.Sprintf("       %-12s  %s", phase, m)
+					b.WriteString(mutedStyle.Render(subline))
+					b.WriteString("\n")
+				}
+			}
 		}
 	}
 

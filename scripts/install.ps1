@@ -32,16 +32,23 @@ param(
     [string]$Channel       = $(if ($env:BETT_CHANNEL) { $env:BETT_CHANNEL } else { "stable" }),
     [string]$GoVersion     = $(if ($env:BETT_GO_VERSION) { $env:BETT_GO_VERSION } else { "1.23.4" }),
     [string]$InstallDir    = $(if ($env:INSTALL_DIR) { $env:INSTALL_DIR } else { Join-Path $HOME "bin" }),
-    [string]$SkipAutoGo    = $env:SKIP_AUTO_GO
+    [string]$SkipAutoGo    = $env:SKIP_AUTO_GO,
+    [string]$Agent         = $(if ($env:BETT_AGENT) { $env:BETT_AGENT } else { "opencode" }),
+    [string]$SDDProfile    = $(if ($env:BETT_SDD_PROFILE) { $env:BETT_SDD_PROFILE } else { "default" }),
+    [switch]$SkipEngram    = ($env:BETT_SKIP_ENGRAM -eq "1"),
+    [switch]$SkipProfiles  = ($env:BETT_SKIP_PROFILES -eq "1")
 )
 
 $ErrorActionPreference = "Stop"
 
 # ─── Config ──────────────────────────────────────────────────────────────────
-$Repo        = "MBH0/bett-code"
-$Binary      = "bett-ai-harness"
-$ModulePath  = "github.com/$Repo/cmd/bett-harness"
-$GitHubApi   = "https://api.github.com"
+$Repo              = "MBH0/bett-code"
+$Binary            = "bett-ai-harness"
+$ModulePath        = "github.com/$Repo/cmd/bett-harness"
+$EngramRepo        = "gentleman-programming/engram"
+$EngramModulePath  = "github.com/$EngramRepo/cmd/engram"
+$EngramBinary      = "engram.exe"
+$GitHubApi         = "https://api.github.com"
 
 # Force UTF-8 output (PowerShell 5.1 defaults to the OEM code page).
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -282,6 +289,99 @@ if (-not $useGoInstall) {
 if ($useGoInstall) {
     Install-FromGo -Ver $goInstallRef
 }
+
+# ─── Engram auto-install ─────────────────────────────────────────────────────
+function Install-Engram {
+    if (Get-Command $EngramBinary -ErrorAction SilentlyContinue) {
+        Write-Ok "Engram present: $((& $EngramBinary --version) 2>&1 | Select-Object -First 1)"
+        return
+    }
+    if ($SkipEngram) {
+        Write-Warn "Engram not found and -SkipEngram set; skipping"
+        return
+    }
+    Write-Warn "Engram not found — installing"
+
+    # Try package managers in order.
+    if (Get-Command scoop -ErrorAction SilentlyContinue) {
+        Write-Log "Installing Engram via scoop…"
+        & scoop install engram 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0 -and (Get-Command $EngramBinary -ErrorAction SilentlyContinue)) {
+            Write-Ok "Installed Engram via scoop"
+            return
+        }
+    }
+    if (Get-Command choco -ErrorAction SilentlyContinue) {
+        Write-Log "Installing Engram via choco…"
+        & choco install engram -y --no-progress 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0 -and (Get-Command $EngramBinary -ErrorAction SilentlyContinue)) {
+            Write-Ok "Installed Engram via choco"
+            return
+        }
+    }
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+        Write-Log "Installing Engram via winget…"
+        # winget doesn't have engram by id; fall through to go install.
+    }
+
+    Write-Log "Installing Engram via go install…"
+    $env:GOBIN = $InstallDir
+    & go install "${EngramModulePath}@latest"
+    if ($LASTEXITCODE -ne 0) {
+        & go install "${EngramModulePath}@main"
+    }
+    if ($LASTEXITCODE -ne 0) {
+        Write-Err "Could not install Engram."
+        Write-Err "Install manually:"
+        Write-Err "  scoop install engram"
+        Write-Err "  go install ${EngramModulePath}@latest"
+        return
+    }
+    Write-Ok "Installed Engram via go install"
+}
+
+Install-Engram
+
+# ─── SDD profile seeding ─────────────────────────────────────────────────────
+function Seed-SDDProfiles {
+    if ($SkipProfiles) {
+        Write-Warn "Skipping SDD profile seeding (-SkipProfiles)"
+        return
+    }
+    $harnessPath = Join-Path $InstallDir "$Binary.exe"
+    if (-not (Test-Path $harnessPath)) {
+        Write-Warn "bett-ai-harness not found at $harnessPath; cannot seed profiles"
+        return
+    }
+    Write-Log "Seeding SDD profile set for $Agent…"
+    & $harnessPath seed-profiles $Agent 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warn "seed-profiles exited with code $LASTEXITCODE"
+        return
+    }
+    Write-Ok "SDD profile set written"
+
+    if ($SDDProfile -ne "") {
+        if ($SDDProfile -notin @("default","cheap","premium")) {
+            Write-Err "Unknown -SDDProfile '$SDDProfile' (valid: default | cheap | premium)"
+            return
+        }
+        & $harnessPath activate-profile $Agent $SDDProfile 2>&1 | Out-Null
+        Write-Ok "Active profile: $SDDProfile"
+    }
+
+    # Per-phase overrides from $env:BETT_MODEL_<PHASE>
+    foreach ($phase in @("orchestrator","explore","propose","spec","design","tasks","apply","verify","archive")) {
+        $var = "BETT_MODEL_" + $phase.ToUpper()
+        $modelVal = (Get-Item env:$var -ErrorAction SilentlyContinue).Value
+        if ($modelVal) {
+            & $harnessPath set-model $Agent $SDDProfile $phase $modelVal 2>&1 | Out-Null
+            Write-Ok "Set $Agent/$SDDProfile/$phase = $modelVal"
+        }
+    }
+}
+
+Seed-SDDProfiles
 
 # ─── PATH configuration ─────────────────────────────────────────────────────
 Add-To-Path -Dir $InstallDir
