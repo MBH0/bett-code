@@ -48,7 +48,7 @@ set -eo pipefail
 REPO="MBH0/bett-code"
 BINARY="bett-ai-harness"
 MODULE_PATH="github.com/${REPO}/cmd/bett-harness"
-ENGRAM_REPO="gentleman-programming/engram"
+ENGRAM_REPO="Gentleman-Programming/engram"
 ENGRAM_MODULE_PATH="github.com/${ENGRAM_REPO}/cmd/engram"
 ENGRAM_BINARY="engram"
 VERSION="${BETT_VERSION:-}"
@@ -423,13 +423,16 @@ ensure_engram() {
   if [[ "$status" -ne 0 ]]; then
     err "Could not install Engram. Install manually:"
     err "  brew install gentleman-programming/tap/engram"
-    err "  go install github.com/${ENGRAM_REPO}/cmd/engram@latest"
+    err "  go install ${ENGRAM_MODULE_PATH}@latest"
     return 1
   fi
   ok "Installed Engram via go install @${ENGRAM_MODULE_PATH}"
 }
 
-ensure_engram
+# Wrap in `|| true` so a failure to install Engram does not abort the rest
+# of the bootstrap — the user can install it manually later. The error is
+# already logged by ensure_engram.
+ensure_engram || true
 
 # ─── SDD profile seeding + model assignment ─────────────────────────────────
 seed_sdd_profiles() {
@@ -466,7 +469,7 @@ seed_sdd_profiles() {
   done
 }
 
-seed_sdd_profiles
+seed_sdd_profiles || true
 
 # ─── Start engram serve in background (best-effort) ─────────────────────────
 start_engram_serve() {
