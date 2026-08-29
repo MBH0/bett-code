@@ -16,7 +16,7 @@
 #   GOBIN/GOPATH     — destination for `go install`
 #   INSTALL_DIR      — destination for downloaded binary (default: $HOME/.local/bin)
 
-set -euo pipefail
+set -eo pipefail
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 REPO="MBH0/bett-code"
@@ -28,10 +28,10 @@ INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 GITHUB_API="https://api.github.com"
 GITHUB_RAW="https://raw.githubusercontent.com"
 
-# ─── Logging helpers ─────────────────────────────────────────────────────────
-log()  { printf '\033[1;35m▸\033[0m %s\n' "$*"; }
-ok()   { printf '\033[1;32m✓\033[0m %s\n' "$*"; }
-warn() { printf '\033[1;33m!\033[0m %s\n' "$*"; }
+# ─── Logging helpers (stderr only so $() captures stay clean) ───────────────
+log()  { printf '\033[1;35m▸\033[0m %s\n' "$*" >&2; }
+ok()   { printf '\033[1;32m✓\033[0m %s\n' "$*" >&2; }
+warn() { printf '\033[1;33m!\033[0m %s\n' "$*" >&2; }
 err()  { printf '\033[1;31m✗\033[0m %s\n' "$*" >&2; }
 
 # ─── Argument parsing ────────────────────────────────────────────────────────
@@ -82,28 +82,31 @@ if ! command -v curl >/dev/null 2>&1; then
   exit 1
 fi
 
-# ─── Resolve target version ──────────────────────────────────────────────────
+# ─── Resolve target version (stdout only, log goes to stderr) ───────────────
 resolve_version() {
   if [[ -n "$VERSION" ]]; then
-    echo "$VERSION"
+    printf '%s\n' "$VERSION"
     return
   fi
   if [[ "$CHANNEL" == "beta" ]]; then
-    log "Resolving latest beta release from GitHub…"
-    curl -fsSL "$GITHUB_API/repos/${REPO}/releases?per_page=20" \
+    log "Resolving latest beta release from GitHub…" >&2
+    curl -fsSL "$GITHUB_API/repos/${REPO}/releases?per_page=20" 2>/dev/null \
       | grep -E '"tag_name"' \
       | grep -E -- '-rc\.|-beta\.|alpha' \
       | head -n1 \
-      | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/'
+      | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/' \
+      || true
   else
-    log "Resolving latest stable release from GitHub…"
-    curl -fsSL "$GITHUB_API/repos/${REPO}/releases/latest" \
+    log "Resolving latest stable release from GitHub…" >&2
+    curl -fsSL "$GITHUB_API/repos/${REPO}/releases/latest" 2>/dev/null \
       | sed -nE 's/.*"tag_name": *"([^"]+)".*/\1/p' \
-      | head -n1
+      | head -n1 \
+      || true
   fi
 }
 
-VERSION="$(resolve_version || true)"
+VERSION="$(resolve_version)"
+USE_GO_INSTALL=0
 if [[ -z "$VERSION" ]]; then
   warn "Could not resolve a release from GitHub; falling back to @latest via go install"
   USE_GO_INSTALL=1
@@ -115,16 +118,15 @@ install_from_release() {
   local archive="${BINARY}_${ver#v}_${os}_${arch}.tar.gz"
   local url="https://github.com/${REPO}/releases/download/${ver}/${archive}"
   log "Downloading ${archive}…"
-  local tmp; tmp="$(mktemp -d)"
-  trap 'rm -rf "$tmp"' EXIT
-  if ! curl -fsSL --fail -o "$tmp/$archive" "$url"; then
+  local tmpdir; tmpdir="$(mktemp -d)"
+  if ! curl -fsSL -o "$tmpdir/$archive" "$url"; then
+    rm -rf "$tmpdir"
     warn "Pre-built release not available for ${os}/${arch} at ${ver}"
     return 1
   fi
-  # Optional: verify minisign signature if available.
-  # Skipped here to keep the bootstrap script simple; rely on TLS + GitHub.
-  tar -xzf "$tmp/$archive" -C "$tmp"
-  install -m 0755 "$tmp/${BINARY}" "${INSTALL_DIR}/${BINARY}"
+  tar -xzf "$tmpdir/$archive" -C "$tmpdir"
+  install -m 0755 "$tmpdir/${BINARY}" "${INSTALL_DIR}/${BINARY}"
+  rm -rf "$tmpdir"
   ok "Installed ${BINARY} to ${INSTALL_DIR}/${BINARY}"
 }
 
@@ -138,7 +140,7 @@ install_from_go() {
   fi
   local gover; gover="$(go version | awk '{print $3}')"
   log "Using Go ${gover}"
-  log "Running: go install ${MODULE_PATH}${ver}"
+  log "Running: GOBIN=${INSTALL_DIR} go install ${MODULE_PATH}${ver}"
   GOBIN="${INSTALL_DIR}" go install "${MODULE_PATH}${ver}"
   ok "Installed ${BINARY} to ${INSTALL_DIR}/${BINARY} (via go install)"
 }
@@ -146,12 +148,11 @@ install_from_go() {
 # ─── Install ─────────────────────────────────────────────────────────────────
 mkdir -p "${INSTALL_DIR}"
 
-USE_GO_INSTALL=0
-if [[ -z "${VERSION:-}" ]]; then
-  USE_GO_INSTALL=1
-elif ! install_from_release "$VERSION"; then
-  warn "Falling back to go install @latest"
-  USE_GO_INSTALL=1
+if [[ "$USE_GO_INSTALL" == "0" ]]; then
+  if ! install_from_release "$VERSION"; then
+    warn "Falling back to go install @latest"
+    USE_GO_INSTALL=1
+  fi
 fi
 
 if [[ "$USE_GO_INSTALL" == "1" ]]; then
@@ -162,16 +163,17 @@ fi
 if ! command -v "${BINARY}" >/dev/null 2>&1; then
   warn "${BINARY} is not on PATH."
   warn "Add this to your shell profile (~/.zshrc, ~/.bashrc, ~/.profile):"
-  printf '\n    export PATH="%s:$PATH"\n\n' "${INSTALL_DIR}"
+  printf '\n    export PATH="%s:$PATH"\n\n' "${INSTALL_DIR}" >&2
 fi
 
 # ─── Verify ─────────────────────────────────────────────────────────────────
 if command -v "${BINARY}" >/dev/null 2>&1; then
   log "Verifying installation…"
-  if "${BINARY}" --help 2>&1 | head -n 5; then
+  if out="$("${BINARY}" --version 2>&1)"; then
+    log "${out}"
     ok "${BINARY} installed successfully"
   else
-    warn "Installation succeeded but ${BINARY} --help exited non-zero"
+    warn "Installation succeeded but ${BINARY} --version exited non-zero"
   fi
 fi
 
