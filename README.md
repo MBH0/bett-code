@@ -91,7 +91,7 @@ Checks the binary, agent binaries, Engram, and Node.js.
 | `internal/assets/plugins/engram.ts` | `~/.config/opencode/plugins/engram.ts` |
 | MCP server `bett-ai` (local stdio) | `~/.config/opencode/opencode.json` |
 | `/doctor`, `/mem`, `/mem-search`, `/skill-registry` | `~/.config/opencode/commands/` |
-| `memory-protocol` skill | `~/.config/opencode/skills/memory-protocol/SKILL.md` |
+| `memory-protocol`, `sdd-orchestrator`, `organic-routing`, `skill-registry`, `rdd-review`, `mcp-management` skills | `~/.config/opencode/skills/<name>/SKILL.md` |
 | `sdd-profiles.json` | `~/.config/opencode/sdd-profiles.json` |
 | `review-mode.json` | `~/.config/opencode/review-mode.json` |
 
@@ -101,7 +101,7 @@ Checks the binary, agent binaries, Engram, and Node.js.
 | --- | --- |
 | MCP server `bett-ai` (stdio) | `~/.claude/mcp.json` |
 | `/doctor`, `/mem`, `/mem-search`, `/skill-registry` | `~/.claude/commands/` |
-| `memory-protocol` skill | `~/.claude/skills/memory-protocol/SKILL.md` |
+| `memory-protocol`, `sdd-orchestrator`, `organic-routing`, `skill-registry`, `rdd-review`, `mcp-management` skills | `~/.claude/skills/<name>/SKILL.md` |
 | Managed `<!-- gentle-ai:bett-harness -->` block | `~/.claude/CLAUDE.md` |
 | `sdd-profiles.json` | `~/.claude/sdd-profiles.json` |
 | `review-mode.json` | `~/.claude/review-mode.json` |
@@ -121,6 +121,8 @@ internal/assets/               embedded plugin, commands, and skills (go:embed)
 scripts/install.sh             POSIX bootstrap installer
 scripts/install.ps1            Windows bootstrap installer
 scripts/verify-install.sh      post-install health check
+scripts/release.sh             semver-tagged release wrapper around goreleaser
+docs/release-signing.md        trust anchors + Windows Authenticode restoration gate
 .goreleaser.yaml               cross-platform release pipeline (binaries, Homebrew, Scoop)
 ```
 
@@ -155,16 +157,27 @@ They use throwaway `XDG_CONFIG_HOME` and `HOME` dirs, so your real config and
 
 ## Releasing
 
+The recommended way to cut a release is the wrapper script (it enforces
+semver, clean tree, and required env vars):
+
 ```bash
-# Prerelease check (no publish)
-goreleaser release --clean --skip=publish
+GITHUB_TOKEN=ghp_... MINISIGN_KEY=$HOME/.minisign/bett.key \
+  scripts/release.sh v0.1.0
 
-# Cut a real release
-goreleaser release --clean
-
-# With minisign signing
-MINISIGN_KEY="$HOME/.minisign/bett.key" goreleaser release --clean
+# Prerelease (auto-detected by goreleaser prerelease: auto)
+GITHUB_TOKEN=ghp_... MINISIGN_KEY=$HOME/.minisign/bett.key \
+  scripts/release.sh v0.2.0-rc.1
 ```
+
+For a quick local dry-run without publishing:
+
+```bash
+goreleaser release --clean --skip=publish
+```
+
+See [`docs/release-signing.md`](docs/release-signing.md) for the trust
+anchor model, the Windows Authenticode restoration gate, and the
+Azure Artifact Signing setup runbook.
 
 Windows binary distribution is held until publicly trusted RSA Authenticode
 signing is provisioned (managed OIDC with Azure Artifact Signing preferred).
